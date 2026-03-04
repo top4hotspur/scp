@@ -1,0 +1,84 @@
+// app/api/repricer/strategies/route.ts
+/* eslint-disable @typescript-eslint/no-explicit-any */
+
+import { NextResponse } from "next/server";
+import outputs from "@/amplify_outputs.json";
+
+export const runtime = "nodejs";
+
+const DATA_URL = (outputs as any)?.data?.url ?? process.env.DATA_URL;
+const DATA_API_KEY = (outputs as any)?.data?.api_key ?? process.env.DATA_API_KEY;
+
+type GqlResp<T> = { data?: T; errors?: { message: string }[] };
+
+async function gql<T>(query: string, variables?: any): Promise<T> {
+  if (!DATA_URL || !DATA_API_KEY) throw new Error("Missing DATA_URL / DATA_API_KEY");
+  const res = await fetch(DATA_URL, {
+    method: "POST",
+    headers: { "content-type": "application/json", "x-api-key": DATA_API_KEY },
+    body: JSON.stringify({ query, variables }),
+    cache: "no-store",
+  });
+  const json = (await res.json().catch(() => ({}))) as GqlResp<T>;
+  if (!res.ok || json.errors?.length) throw new Error(json.errors?.map((e) => e.message).join(" | ") || `HTTP ${res.status}`);
+  return json.data as T;
+}
+
+const GET_SETTINGS = /* GraphQL */ `
+  query GetAppSettings($id: ID!) {
+    getAppSettings(id: $id) {
+      id
+      repricerStrategiesJson
+      updatedAtIso
+    }
+  }
+`;
+
+const UPDATE_SETTINGS = /* GraphQL */ `
+  mutation UpdateAppSettings($input: UpdateAppSettingsInput!) {
+    updateAppSettings(input: $input) {
+      id
+      repricerStrategiesJson
+      updatedAtIso
+    }
+  }
+`;
+
+function safeJson<T>(s: any, fallback: T): T {
+  try {
+    const v = typeof s === "string" ? JSON.parse(s) : s;
+    return (v ?? fallback) as T;
+  } catch {
+    return fallback;
+  }
+}
+
+export async function GET() {
+  try {
+    const d: any = await gql(GET_SETTINGS, { id: "global" });
+    const raw = d?.getAppSettings?.repricerStrategiesJson ?? "[]";
+    return NextResponse.json({ ok: true, strategies: safeJson(raw, []) });
+  } catch (e: any) {
+    return NextResponse.json({ ok: false, error: String(e?.message ?? e) }, { status: 500 });
+  }
+}
+
+export async function PUT(req: Request) {
+  try {
+    const body = await req.json().catch(() => ({}));
+    const strategies = Array.isArray(body?.strategies) ? body.strategies : null;
+    if (!strategies) return NextResponse.json({ ok: false, error: "Body must include strategies: []" }, { status: 400 });
+
+    const nowIso = new Date().toISOString();
+    const input = {
+      id: "global",
+      repricerStrategiesJson: JSON.stringify(strategies),
+      updatedAtIso: nowIso,
+    };
+
+    await gql(UPDATE_SETTINGS, { input });
+    return NextResponse.json({ ok: true });
+  } catch (e: any) {
+    return NextResponse.json({ ok: false, error: String(e?.message ?? e) }, { status: 500 });
+  }
+}

@@ -1,0 +1,82 @@
+// app/api/inventory/sku/upsert/route.ts
+import { NextResponse } from "next/server";
+import outputs from "@/amplify_outputs.json";
+
+const DATA_URL = outputs.data.url;
+const DATA_API_KEY = outputs.data.api_key;
+
+type GqlResp<T> = { data?: T; errors?: { message: string }[] };
+
+async function gql<T>(query: string, variables?: any): Promise<T> {
+  if (!DATA_URL || !DATA_API_KEY) throw new Error("Missing amplify_outputs.json data.url/api_key");
+
+  const res = await fetch(DATA_URL, {
+    method: "POST",
+    headers: { "content-type": "application/json", "x-api-key": DATA_API_KEY },
+    body: JSON.stringify({ query, variables }),
+    cache: "no-store",
+  });
+
+  const json = (await res.json().catch(() => ({}))) as GqlResp<T>;
+  if (!res.ok || json.errors?.length) {
+    throw new Error(json.errors?.map((e) => e.message).join(" | ") || `HTTP ${res.status}`);
+  }
+  return json.data as T;
+}
+
+const UPDATE_ONE = /* GraphQL */ `
+  mutation UpdateInventorySku($input: UpdateInventorySkuInput!) {
+    updateInventorySku(input: $input) {
+      marketplaceId
+      sku
+    }
+  }
+`;
+
+const CREATE_ONE = /* GraphQL */ `
+  mutation CreateInventorySku($input: CreateInventorySkuInput!) {
+    createInventorySku(input: $input) {
+      marketplaceId
+      sku
+    }
+  }
+`;
+
+async function upsert(input: any) {
+  try {
+    await gql(UPDATE_ONE, { input });
+  } catch {
+    await gql(CREATE_ONE, { input });
+  }
+}
+
+export async function POST(req: Request) {
+  try {
+    const body = await req.json().catch(() => ({} as any));
+
+    const marketplaceId = String(body?.marketplaceId ?? "").trim();
+    const sku = String(body?.sku ?? "").trim();
+    if (!marketplaceId || !sku) {
+      return NextResponse.json(
+        { ok: false, error: "Missing required: marketplaceId, sku" },
+        { status: 400 }
+      );
+    }
+
+    const input = {
+      marketplaceId,
+      sku,
+      shortTitle: body?.shortTitle ?? null,
+      availableUnits: Number.isFinite(Number(body?.availableUnits)) ? Number(body.availableUnits) : null,
+      inboundUnits: Number.isFinite(Number(body?.inboundUnits)) ? Number(body.inboundUnits) : null,
+      reservedUnits: Number.isFinite(Number(body?.reservedUnits)) ? Number(body.reservedUnits) : null,
+      supplierName: body?.supplierName ?? null,
+      prodGroup1: body?.prodGroup1 ?? null,
+    };
+
+    await upsert(input);
+    return NextResponse.json({ ok: true, item: input });
+  } catch (e: any) {
+    return NextResponse.json({ ok: false, error: String(e?.message ?? e) }, { status: 500 });
+  }
+}

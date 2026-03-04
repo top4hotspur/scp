@@ -1,0 +1,291 @@
+//app/api/purchase-orders/upsert-line/route.ts
+import { NextResponse } from "next/server";
+import outputs from "@/amplify_outputs.json";
+
+const DATA_URL = outputs.data.url;
+const DATA_API_KEY = outputs.data.api_key;
+
+type GqlResp<T> = { data?: T; errors?: { message: string }[] };
+
+async function gql<T>(query: string, variables?: any): Promise<T> {
+  if (!DATA_URL || !DATA_API_KEY) throw new Error("Missing DATA_URL / DATA_API_KEY");
+
+  const res = await fetch(DATA_URL, {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      "x-api-key": DATA_API_KEY,
+    },
+    body: JSON.stringify({ query, variables }),
+  });
+
+  const json = (await res.json().catch(() => ({}))) as GqlResp<T>;
+  if (!res.ok || json.errors?.length) {
+    throw new Error(json.errors?.map((e) => e.message).join(" | ") || `HTTP ${res.status}`);
+  }
+  return json.data as T;
+}
+
+function nowIso() {
+  return new Date().toISOString();
+}
+
+const LIST_PO = /* GraphQL */ `
+  query ListPurchaseOrders($filter: ModelPurchaseOrderFilterInput, $limit: Int) {
+    listPurchaseOrders(filter: $filter, limit: $limit) {
+      items {
+        id
+        status
+        supplier
+        marketplaceId
+        draftSuffix
+        createdAtIso
+        updatedAtIso
+        totalUnits
+        totalValue
+      }
+    }
+  }
+`;
+
+const CREATE_PO = /* GraphQL */ `
+  mutation CreatePurchaseOrder($input: CreatePurchaseOrderInput!) {
+    createPurchaseOrder(input: $input) {
+      id
+      status
+      supplier
+      marketplaceId
+      draftSuffix
+      createdAtIso
+      updatedAtIso
+      totalUnits
+      totalValue
+    }
+  }
+`;
+
+const GET_SUPPLIERMAP = /* GraphQL */ `
+  query GetSupplierMap($id: ID!) {
+    getSupplierMap(id: $id) {
+      id
+      sku
+      supplierName
+      productCost
+      prepCost
+      shippingCost
+    }
+  }
+`;
+
+const GET_LINE = /* GraphQL */ `
+  query GetPurchaseOrderLine($id: ID!) {
+    getPurchaseOrderLine(id: $id) {
+      id
+      purchaseOrderId
+      sku
+      qty
+      unitCost
+      lineValue
+      updatedAtIso
+    }
+  }
+`;
+
+const CREATE_LINE = /* GraphQL */ `
+  mutation CreatePurchaseOrderLine($input: CreatePurchaseOrderLineInput!) {
+    createPurchaseOrderLine(input: $input) {
+      id
+      purchaseOrderId
+      sku
+      qty
+      unitCost
+      lineValue
+      updatedAtIso
+    }
+  }
+`;
+
+const UPDATE_LINE = /* GraphQL */ `
+  mutation UpdatePurchaseOrderLine($input: UpdatePurchaseOrderLineInput!) {
+    updatePurchaseOrderLine(input: $input) {
+      id
+      purchaseOrderId
+      sku
+      qty
+      unitCost
+      lineValue
+      updatedAtIso
+    }
+  }
+`;
+
+const DELETE_LINE = /* GraphQL */ `
+  mutation DeletePurchaseOrderLine($input: DeletePurchaseOrderLineInput!) {
+    deletePurchaseOrderLine(input: $input) {
+      id
+    }
+  }
+`;
+
+const LINES_BY_PO = /* GraphQL */ `
+  query LinesByPo($purchaseOrderId: String!, $limit: Int) {
+    purchaseOrderLinesByPurchaseOrder(purchaseOrderId: $purchaseOrderId, limit: $limit) {
+      items {
+        id
+        purchaseOrderId
+        sku
+        qty
+        unitCost
+        lineValue
+        updatedAtIso
+      }
+    }
+  }
+`;
+
+const UPDATE_PO = /* GraphQL */ `
+  mutation UpdatePurchaseOrder($input: UpdatePurchaseOrderInput!) {
+    updatePurchaseOrder(input: $input) {
+      id
+      status
+      supplier
+      marketplaceId
+      draftSuffix
+      createdAtIso
+      updatedAtIso
+      totalUnits
+      totalValue
+    }
+  }
+`;
+
+export async function POST(req: Request) {
+  try {
+    const body = (await req.json().catch(() => ({}))) as any;
+
+    const mid = String(body.mid ?? "").trim();
+const supplier = String(body.supplier ?? "").trim();
+const draftSuffix = String(body.draftSuffix ?? "").trim(); // required in Option B
+const sku = String(body.sku ?? "").trim();
+const qty = Number(body.qty ?? 0);
+
+    if (!mid) return NextResponse.json({ ok: false, error: "Missing mid" }, { status: 400 });
+    if (!supplier) return NextResponse.json({ ok: false, error: "Missing supplier" }, { status: 400 });
+    if (!draftSuffix) return NextResponse.json({ ok: false, error: "Missing draftSuffix" }, { status: 400 });
+    if (!sku) return NextResponse.json({ ok: false, error: "Missing sku" }, { status: 400 });
+    if (!Number.isFinite(qty) || qty < 0)
+      return NextResponse.json({ ok: false, error: "qty must be a number >= 0" }, { status: 400 });
+
+    // 1) Find or create draft PO
+    const poList = await gql<any>(LIST_PO, {
+      filter: { marketplaceId: { eq: mid }, supplier: { eq: supplier }, status: { eq: "DRAFT" } },
+      limit: 50,
+    });
+
+    const drafts =
+  (poList?.listPurchaseOrders?.items ?? []).filter(
+    (x: any) =>
+      x &&
+      x.status === "DRAFT" &&
+      x.marketplaceId === mid &&
+      x.supplier === supplier &&
+      String(x.draftSuffix ?? "") === draftSuffix
+  ) ?? [];
+
+const existing =
+  drafts.sort((a: any, b: any) => String(b.updatedAtIso).localeCompare(String(a.updatedAtIso)))[0] ?? null;
+
+    const po =
+      existing ??
+      (await gql<any>(CREATE_PO, {
+        input: {
+          status: "DRAFT",
+          supplier,
+          marketplaceId: mid,
+          draftSuffix,
+          createdAtIso: nowIso(),
+          updatedAtIso: nowIso(),
+          totalUnits: 0,
+          totalValue: 0,
+        },
+      }))?.createPurchaseOrder;
+
+    const lineId = `${po.id}#${sku}`;
+
+    // 2) Determine unit cost (from SupplierMap; cheap single read)
+    // NOTE: your SupplierMap comment says id=sku, so we assume getSupplierMap(sku) works.
+    let unitCost = 0;
+    try {
+      const sm = await gql<any>(GET_SUPPLIERMAP, { id: sku });
+      const row = sm?.getSupplierMap;
+      // Minimum viable: use productCost as unit cost
+      unitCost = Number(row?.productCost ?? 0) || 0;
+    } catch {
+      unitCost = 0;
+    }
+
+    // 3) Upsert / delete
+    let existingLine: any = null;
+    try {
+      const got = await gql<any>(GET_LINE, { id: lineId });
+      existingLine = got?.getPurchaseOrderLine ?? null;
+    } catch {
+      existingLine = null;
+    }
+
+    if (qty === 0) {
+      if (existingLine) {
+        await gql<any>(DELETE_LINE, { input: { id: lineId } });
+      }
+    } else {
+      const lineValue = qty * unitCost;
+      if (!existingLine) {
+        await gql<any>(CREATE_LINE, {
+          input: {
+            id: lineId,
+            purchaseOrderId: po.id,
+            sku,
+            qty,
+            unitCost,
+            lineValue,
+            updatedAtIso: nowIso(),
+          },
+        });
+      } else {
+        await gql<any>(UPDATE_LINE, {
+          input: {
+            id: lineId,
+            qty,
+            unitCost,
+            lineValue,
+            updatedAtIso: nowIso(),
+          },
+        });
+      }
+    }
+
+    // 4) Recalc totals from current lines (single indexed query)
+    const linesData = await gql<any>(LINES_BY_PO, { purchaseOrderId: po.id, limit: 500 });
+    const lines = (linesData?.purchaseOrderLinesByPurchaseOrder?.items ?? []).filter((x: any) => x && x.qty > 0);
+
+    const totalUnits = lines.reduce((s: number, r: any) => s + (Number(r.qty) || 0), 0);
+    const totalValue = lines.reduce((s: number, r: any) => s + (Number(r.lineValue) || 0), 0);
+
+    const po2 = await gql<any>(UPDATE_PO, {
+      input: {
+        id: po.id,
+        updatedAtIso: nowIso(),
+        totalUnits,
+        totalValue,
+      },
+    });
+
+    return NextResponse.json({
+      ok: true,
+      draft: po2?.updatePurchaseOrder ?? po,
+      lines,
+    });
+  } catch (e: any) {
+    return NextResponse.json({ ok: false, error: e?.message ?? "Unknown error" }, { status: 500 });
+  }
+}

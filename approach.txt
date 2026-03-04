@@ -1,0 +1,130 @@
+The non-negotiables (STK-style cost rules)
+
+One data pipe, many features
+Inventory, Orders, Repricer, Reports all read from the same stored “truth” (your tables + snapshots). No duplicated “repricer fetches” vs “dashboard fetches”.
+
+Event-driven first; cron only as a backstop
+Repricing runs when there’s a reason (offer changed / buy box moved), not every 5–15 minutes. Amazon’s ANY_OFFER_CHANGED notification exists specifically for this purpose.
+
+Authoritative sources only when needed
+
+Most of the time: use your last-known offer price, your last-known buy box, your own Listings offer snapshot.
+
+Only call SP-API “heavy” endpoints if we are about to PATCH price (or validating drift).
+
+Snapshot everything; pages read snapshots
+Pages should load from a single fast snapshot record per marketplace + time bucket (e.g., “InventorySnapshot: UK, last sync 10 min ago”) and then drill-down only on demand.
+
+CloudWatch logs are a hidden tax
+Log ingestion costs are real; keep logs structured + sampled + short retention.
+
+Proposed architecture (cheap + fast)
+Core AWS components (keep it small)
+
+Amplify Hosting for the Next.js UI (cheap, CDN, fast).
+
+DynamoDB for operational tables + snapshots (on-demand; careful with writes).
+
+SQS queue to buffer notifications and work (very cheap; has free tier).
+
+Lambda workers for ingestion + repricer decisions (also cheap at this scale).
+
+EventBridge Scheduler only for backstops (free tier is huge).
+
+S3 for SupplierMap uploads + exports (minimal cost at your size).
+
+The event flow (STK-like repricer)
+
+Subscribe to Amazon ANY_OFFER_CHANGED notifications (only for items where you have active offers).
+
+Notifications land in SQS.
+
+A Lambda “offer-change worker” consumes messages, dedupes, and decides:
+
+Skip if (a) you already own buy box, (b) sole seller, (c) strategy says “hold”, (d) you repriced very recently.
+
+Only then call the minimal SP-API reads required to confirm (or use cached Listings snapshot if still fresh).
+
+If patch required, do one SP-API patch, then store updated state so UI reflects it instantly.
+
+This is the single biggest lever to avoid the “polling money pit”.
+
+Module plan (what we build, and how it stays cheap)
+1) Inventory (UK + EU)
+
+Goal: accurate, reasonably fresh stock across marketplaces, fast page load.
+
+Approach:
+
+Maintain InventorySnapshot per marketplace + a SKU-level table keyed by (marketplaceId, skuKey).
+
+Update via:
+
+Incremental pulls on a schedule appropriate to volume (e.g., UK more frequent; EU per-marketplace, less).
+
+Backpressure + batching (never refresh everything “because page loaded”).
+
+Fast UI:
+
+Page reads snapshot first (instant), then fetches SKU drill-down only when you search/filter.
+
+2) Orders (restock backbone)
+
+Goal: up-to-date enough to drive restock decisions.
+
+Approach:
+
+Store orders in a partitioned table (marketplaceId, orderDateBucket) so queries are cheap.
+
+Maintain SalesSummary snapshots (e.g., 7d/30d units, revenue) so restock page loads instantly.
+
+Cost guardrail:
+Orders ingestion should run “often enough”, but not to the point you’re re-reading the universe every few minutes. We use a cursor/“since last updated” model and per-marketplace incremental windows.
+
+3) Repricing (the hard one)
+
+Goal: constant readiness, but cheap.
+
+Approach:
+
+Event-driven notifications (ANY_OFFER_CHANGED).
+
+Local “decision model” uses:
+
+SupplierMap costs
+
+last-known fees (cached)
+
+last-known own offer
+
+last-known buybox
+
+Skip rules first, reads second, patch last.
+
+Backstop scheduler: e.g., once every few hours, do a low-rate “drift check” on a small sample or on SKUs that haven’t had events.
+
+4) New Products (bulk EAN → pricing + volume)
+
+Goal: later feature, but architect now.
+
+Approach:
+
+Make it an offline job (queued + throttled), not an interactive “hit Amazon live for 2,000 EANs”.
+
+Results cached forever (or refreshed weekly).
+
+UI reads from your cached table.
+
+5) SupplierMap CSV upload
+
+Goal: single upload drives costs, profit, floor prices, restock logic.
+
+Approach:
+
+CSV → S3 → Lambda parse → upsert into DynamoDB keyed by skuKey.
+
+Version it, so you can roll back.
+
+Keep it separate from Amazon data (so you don’t re-fetch Amazon data when SupplierMap changes).
+
+And finally, we need instructions in FIND/COPY/PASTE style!

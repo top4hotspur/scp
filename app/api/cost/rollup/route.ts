@@ -1,0 +1,96 @@
+//app/api/cost/rollup/route.ts
+import { NextResponse } from "next/server";
+import outputs from "@/amplify_outputs.json";
+
+const DATA_URL = outputs.data.url;
+const DATA_API_KEY = outputs.data.api_key;
+
+type GqlResp<T> = { data?: T; errors?: { message: string }[] };
+
+async function gql<T>(query: string, variables?: any): Promise<T> {
+  if (!DATA_URL || !DATA_API_KEY) throw new Error("Missing amplify_outputs.json data.url/api_key");
+
+  const res = await fetch(DATA_URL, {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      "x-api-key": DATA_API_KEY,
+    },
+    body: JSON.stringify({ query, variables }),
+    cache: "no-store",
+  });
+
+  const json = (await res.json().catch(() => ({}))) as GqlResp<T>;
+  if (!res.ok || json.errors?.length) {
+    throw new Error(json.errors?.map((e) => e.message).join(" | ") || `HTTP ${res.status}`);
+  }
+  return json.data as T;
+}
+
+function yyyyMmDd(d = new Date()) {
+  const y = d.getUTCFullYear();
+  const m = String(d.getUTCMonth() + 1).padStart(2, "0");
+  const dd = String(d.getUTCDate()).padStart(2, "0");
+  return `${y}-${m}-${dd}`;
+}
+
+function ddMmYyyyFromDayId(dayId: string) {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(dayId);
+  if (!m) return dayId;
+  const [, y, mm, dd] = m;
+  return `${dd}/${mm}/${y}`;
+}
+
+const GET_DAY = /* GraphQL */ `
+  query GetDay($id: ID!) {
+    getCostRollupDay(id: $id) {
+      id
+      estUsd
+      updatedAtIso
+    }
+  }
+`;
+
+const LIST_BY_DAY = /* GraphQL */ `
+  query ListByDay($day: String!) {
+    costRollupDayByKeysByDay(day: $day, limit: 50) {
+      items {
+        id
+        key
+        estUsd
+        units
+      }
+    }
+  }
+`;
+
+export async function GET() {
+  const day = yyyyMmDd(new Date());
+
+  const dayRow = await gql<{ getCostRollupDay: any }>(GET_DAY, { id: day }).catch(() => ({
+    getCostRollupDay: null,
+  }));
+
+  const byKey = await gql<any>(LIST_BY_DAY, { day }).catch(() => ({
+    costRollupDayByKeysByDay: { items: [] },
+  }));
+
+  const items = (byKey?.costRollupDayByKeysByDay?.items ?? []) as any[];
+
+  const top = items
+    .map((x) => ({
+      k: String(x.key),
+      v: Number(x.estUsd ?? 0),
+    }))
+    .sort((a, b) => b.v - a.v)
+    .slice(0, 10);
+
+  return NextResponse.json({
+    dayId: day,
+    dayDisplay: ddMmYyyyFromDayId(day),
+    todayEstUsd: Number(dayRow?.getCostRollupDay?.estUsd ?? 0),
+    ydayActualUsd: null,
+    top,
+    updatedIso: new Date().toISOString(),
+  });
+}
