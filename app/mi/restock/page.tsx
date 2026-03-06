@@ -481,7 +481,7 @@ case "daysToOrder": {
       {/* Header */}
       <div className="flex items-start justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-semibold">MI â€¢ Restock</h1>
+          <h1 className="text-2xl font-semibold">MI • Restock</h1>
           <p className="text-white/60">Snapshot-first + supplier-driven restock planning (no SP-API calls from UI).</p>
           <p className="text-xs text-white/60 mt-1">
             Snapshot: {snap?.status ?? "â€”"} Â· {fmtIso(snap?.createdAtIso)}

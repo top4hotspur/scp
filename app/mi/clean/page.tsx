@@ -29,7 +29,7 @@ function cx(...parts: Array<string | false | null | undefined>) {
 }
 
 function fmtIso(iso?: string) {
-  if (!iso) return "â€”";
+  if (!iso) return "—";
   const d = new Date(iso);
   if (isNaN(d.getTime())) return iso;
 
@@ -304,7 +304,7 @@ const downloadBulkDeletePopulated = useCallback(() => {
       {/* Header */}
       <div className="flex items-start justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-semibold">MI â€¢ Clean</h1>
+          <h1 className="text-2xl font-semibold">MI • Clean</h1>
           <p className="text-white/60">{headerSub}</p>
           {!!Object.keys(counts ?? {}).length && (
   <p className="text-white/60 text-sm">

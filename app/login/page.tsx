@@ -3,7 +3,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { signIn, confirmSignIn } from "aws-amplify/auth";
+import { signIn, confirmSignIn, signOut } from "aws-amplify/auth";
 import { ensureAmplifyConfigured } from "@/lib/amplifyClient";
 
 export default function LoginPage() {
@@ -14,7 +14,23 @@ export default function LoginPage() {
   const [needsNewPassword, setNeedsNewPassword] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  async function signInReplacingExistingSession(username: string, password: string) {
+    try {
+      return await signIn({ username, password });
+    } catch (e: any) {
+      const msg = String(e?.message ?? e ?? "");
 
+      if (
+        msg.includes("already a signed in user") ||
+        msg.includes("already signed in user")
+      ) {
+        await signOut();
+        return await signIn({ username, password });
+      }
+
+      throw e;
+    }
+  }
     async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
     setErr(null);
@@ -37,7 +53,7 @@ export default function LoginPage() {
         return;
       }
 
-      const result = await signIn({ username: email, password: pw });
+            const result = await signInReplacingExistingSession(email, pw);
 
       if (result?.isSignedIn) {
         router.replace("/mi/overview");

@@ -213,7 +213,7 @@ export default function Page() {
       {/* Header */}
       <div className="flex items-end justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-semibold">MI â€¢ Sales</h1>
+          <h1 className="text-2xl font-semibold">MI • Sales</h1>
           <p className="text-white/60">Snapshot-first dashboard (SalesSnapshot + SalesLine drilldown).</p>
         </div>
 

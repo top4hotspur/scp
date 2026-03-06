@@ -36,17 +36,17 @@ type ReportKey = "SALES_ORDERS" | "SALES_BUILD_SNAPSHOT" | "SALES_CANCELLATIONS"
 const REPORTS: { key: ReportKey; title: string; desc: string }[] = [
   {
     key: "SALES_ORDERS",
-    title: "Sales â€¢ Orders report",
+    title: "Sales — Orders report",
     desc: "Near-real-time sales feed (includes unshipped). Used for Overview â€˜Today so farâ€™.",
   },
   {
   key: "SALES_BUILD_SNAPSHOT",
-  title: "Sales â€¢ Build snapshot",
+  title: "Sales — Build snapshot",
   desc: "Rebuild SalesSnapshot buckets from stored SalesLine rows (keeps MI Sales page live).",
 },
   {
     key: "SALES_CANCELLATIONS",
-    title: "Sales â€¢ Cancellations report",
+    title: "Sales — Cancellations report",
     desc: "Daily cleanup for cancelled/unshipped orders to keep Overview accurate.",
   },
 ];
@@ -155,7 +155,7 @@ export default function Page() {
     <div className="space-y-4">
       <div className="flex items-end justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-semibold">Settings â€¢ Reporting</h1>
+          <h1 className="text-2xl font-semibold">Settings • Reporting</h1>
           <p className="text-white/60">
             Configure day/night cadence per report. Scheduler tick reads these settings (STK-style).
           </p>
@@ -187,7 +187,7 @@ export default function Page() {
       <div className="rounded-2xl border border-white/10 bg-white/5 p-4 space-y-3">
         <div className="text-sm font-semibold">Daytime window</div>
         <div className="text-xs text-white/60">
-          Used to choose whether â€œday cadenceâ€ or â€œnight cadenceâ€ applies. Hours are Europe/London.
+          Used to choose whether day cadence or night cadence applies. Hours are Europe/London.
         </div>
 
         <div className="flex flex-wrap items-center gap-3">
@@ -275,7 +275,7 @@ export default function Page() {
         </div>
 
         <div className="text-xs text-white/60">
-          Next: weâ€™ll add a â€œRun nowâ€ button per report once the downloader endpoints exist.
+          Next: we'll add a "Run now" button per report once the downloader endpoints exist.
         </div>
       </div>
     </div>
