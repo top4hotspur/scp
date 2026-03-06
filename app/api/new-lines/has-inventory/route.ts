@@ -1,10 +1,6 @@
 // app/api/new-lines/has-inventory/route.ts
 import { NextResponse } from "next/server";
-import outputs from "@/amplify_outputs.json";
-
-const DATA_URL = (outputs as any)?.data?.url;
-const DATA_API_KEY = (outputs as any)?.data?.api_key;
-
+import { DATA_URL, DATA_API_KEY } from "@/lib/dataEnv";
 type GqlResp<T> = { data?: T; errors?: { message: string }[] };
 
 async function gql<T>(query: string, variables?: any): Promise<T> {
@@ -56,3 +52,4 @@ export async function POST(req: Request) {
     return NextResponse.json({ ok: false, error: String(e?.message ?? e) }, { status: 500 });
   }
 }
+

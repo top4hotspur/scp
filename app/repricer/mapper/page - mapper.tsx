@@ -1,4 +1,4 @@
-//app/repricer/mapper/page.tsx
+﻿//app/repricer/mapper/page.tsx
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
@@ -18,7 +18,7 @@ type Assignment = {
   // Strategy link
   strategyId: string;
 
-  // Optional per-scope overrides (profit etc) – leave null to inherit from strategy
+  // Optional per-scope overrides (profit etc)  leave null to inherit from strategy
   overrideMinProfitGbp?: number | null;
   overrideMaxPriceGbp?: number | null;
 
@@ -155,9 +155,9 @@ export default function Page() {
     <div className="space-y-4">
       <div className="flex items-start justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-semibold">Repricer • Strategy Mapper</h1>
+          <h1 className="text-2xl font-semibold">Repricer Ã¢â‚¬Â¢ Strategy Mapper</h1>
           <p className="text-white/60">
-            Map a Strategy to SKUs, Suppliers, or Product Groups (1–5). Supports per-market overrides + automation triggers.
+            Map a Strategy to SKUs, Suppliers, or Product Groups (1Ã¢â‚¬â€œ5). Supports per-market overrides + automation triggers.
           </p>
         </div>
         <div className="flex gap-2">
@@ -169,7 +169,7 @@ export default function Page() {
             disabled={saving || loading}
             className="rounded-xl bg-emerald-500/20 px-3 py-2 text-sm hover:bg-emerald-500/30 disabled:opacity-40"
           >
-            {saving ? "Saving…" : "Save"}
+            {saving ? "SavingÃ¢â‚¬Â¦" : "Save"}
           </button>
         </div>
       </div>
@@ -186,7 +186,7 @@ export default function Page() {
               value={q}
               onChange={(e) => setQ(e.target.value)}
               className="w-72 rounded-xl border border-white/10 bg-black/20 px-3 py-2 outline-none"
-              placeholder="sku / supplier / pg…"
+              placeholder="sku / supplier / pgÃ¢â‚¬Â¦"
             />
           </label>
 
@@ -296,7 +296,7 @@ export default function Page() {
                   <td className="px-3 py-2 text-xs text-white/70">
                     <div className="flex flex-col gap-1">
                       <label className="flex items-center gap-2">
-                        <span className="w-28 text-white/50">Min profit £</span>
+                        <span className="w-28 text-white/50">Min profit Ã‚£</span>
                         <input
                           type="number"
                           value={a.overrideMinProfitGbp ?? ""}
@@ -307,7 +307,7 @@ export default function Page() {
                         />
                       </label>
                       <label className="flex items-center gap-2">
-                        <span className="w-28 text-white/50">Max price £</span>
+                        <span className="w-28 text-white/50">Max price Ã‚£</span>
                         <input
                           type="number"
                           value={a.overrideMaxPriceGbp ?? ""}
@@ -380,7 +380,7 @@ export default function Page() {
               {!filtered.length && (
                 <tr>
                   <td colSpan={8} className="px-3 py-6 text-center text-white/50">
-                    No mappings. Click “Add mapping”.
+                    No mappings. Click Ã¢â‚¬Å“Add mappingÃ¢â‚¬Â.
                   </td>
                 </tr>
               )}
@@ -389,7 +389,7 @@ export default function Page() {
         </div>
 
         <div className="px-3 py-2 text-xs text-white/40">
-          Order of application (when the worker arrives): SKU mapping &gt; Supplier &gt; PG5…PG1 (most specific wins), then strategy
+          Order of application (when the worker arrives): SKU mapping &gt; Supplier &gt; PG5Ã¢â‚¬Â¦PG1 (most specific wins), then strategy
           defaults, then assignment overrides.
         </div>
       </div>

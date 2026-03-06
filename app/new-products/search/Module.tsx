@@ -171,7 +171,7 @@ if (keys.length) {
     <div className="space-y-4">
       <div className="flex items-end justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-semibold">New Products • Search</h1>
+          <h1 className="text-2xl font-semibold">New Products â€¢ Search</h1>
           <p className="text-white/60">
             Paste EANs to scan UK/EU catalog, estimate sales + profit (STK-style cache-first).
           </p>
@@ -285,15 +285,15 @@ if (keys.length) {
   {r.ok ? (
     r.title || "(no title)"
   ) : retryingKey === rowKey(r) ? (
-    <span className="text-amber-200">Retrying…</span>
+    <span className="text-amber-200">Retryingâ€¦</span>
   ) : (
     <span className="text-red-200">{r.message || "Not found"}</span>
   )}
 </div>
 
                   <div className="mt-1 flex flex-wrap gap-3 text-xs text-white/60">
-                    <span>BSR: {r.bsr ?? "—"}</span>
-                    <span>Sales/mo: {r.estMonthlySales ?? "—"}</span>
+                    <span>BSR: {r.bsr ?? "â€”"}</span>
+                    <span>Sales/mo: {r.estMonthlySales ?? "â€”"}</span>
                   </div>
                 </div>
 

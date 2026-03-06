@@ -1,12 +1,11 @@
-// app/api/restock/table/route.ts
+﻿// app/api/restock/table/route.ts
 import { NextResponse } from "next/server";
 import outputs from "@/amplify_outputs.json";
 
 export const runtime = "nodejs";
 
-const DATA_URL = (outputs as any)?.data?.url ?? process.env.DATA_URL;
-const DATA_API_KEY = (outputs as any)?.data?.api_key ?? process.env.DATA_API_KEY;
-
+const DATA_URL = (outputs as any)?.data?.url;
+const DATA_API_KEY = (outputs as any)?.data?.api_key;
 type GqlResp<T> = { data?: T; errors?: { message: string }[] };
 
 async function gql<T>(query: string, variables?: any): Promise<T> {
@@ -127,7 +126,7 @@ function subtractDaysIsoFromLondonMidnight(days: number): string {
   return start.toISOString();
 }
 
-function matchesFilters(x: SupplierMapRow, supplier: string, pg: (string | null)[]) {
+function matchesFilters(x: SupplierMapRow, supplier: string | null, pg: (string | null)[]) {
   if (supplier && String(x.supplierName ?? "").trim() !== supplier) return false;
 
   const [pg1, pg2, pg3, pg4, pg5] = pg.map((v) => (v ? v.trim() : ""));
@@ -199,7 +198,7 @@ function buildSupplierSkuAliasMaps(supplierSkus: string[]) {
       if (last && !aliasToFull[last]) aliasToFull[last] = full;
     }
 
-    // if it ends with a 3-6 digit number, alias that too (extra safe)
+    // if it ends with a 3-6 digit number, alias that too
     const m = full.match(/(\d{3,6})$/);
     if (m?.[1] && !aliasToFull[m[1]]) aliasToFull[m[1]] = full;
   }
@@ -207,27 +206,28 @@ function buildSupplierSkuAliasMaps(supplierSkus: string[]) {
   return { aliasToFull, fullSet };
 }
 
+function parseWindows(requestedDays: number, extraParam: string) {
+  const baseDays = 30;
+
+  const extraDays = String(extraParam ?? "")
+    .split(",")
+    .map((x) => Math.trunc(Number(x.trim())))
+    .filter((n) => Number.isFinite(n) && n >= 2 && n <= 90);
+
+  const windows = Array.from(new Set([baseDays, requestedDays, ...extraDays])).sort((a, b) => a - b);
+  return { baseDays, windows };
+}
+
 export async function GET(req: Request) {
   try {
     const { searchParams } = new URL(req.url);
 
     const mid = String(searchParams.get("mid") ?? "").trim();
+    const supplierRaw = String(searchParams.get("supplier") ?? "").trim(); // OPTIONAL
+    const supplierFilter = supplierRaw ? supplierRaw : null;
 
-    // OPTIONAL supplier filter (empty => ALL suppliers)
-    const supplier = String(searchParams.get("supplier") ?? "").trim();
-    const supplierFilter = supplier ? supplier : null;
-
-    // Requested horizon for cover/order math (UI), baseline is always 30d.
     const requestedDays = Math.max(2, Math.min(90, Number(searchParams.get("days") ?? 30)));
-    const baseDays = 30;
-
-    // Optional: extra windows for repricer / analysis (e.g. extra=2,7)
-    const extraDays = String(searchParams.get("extra") ?? "")
-      .split(",")
-      .map((x) => Math.trunc(Number(x.trim())))
-      .filter((n) => Number.isFinite(n) && n >= 2 && n <= 90);
-
-    const windows = Array.from(new Set([baseDays, requestedDays, ...extraDays])).sort((a, b) => a - b);
+    const { baseDays, windows } = parseWindows(requestedDays, String(searchParams.get("extra") ?? ""));
 
     const pg = [
       searchParams.get("pg1"),
@@ -249,7 +249,7 @@ export async function GET(req: Request) {
 
       const data = await gql<ListResp<SupplierMapRow>>(LIST_SUPPLIERMAPS, vars);
       const items = data?.listSupplierMaps?.items ?? [];
-      for (const it of items) if (it && matchesFilters(it, supplierFilter ?? "", pg)) supplierRows.push(it);
+      for (const it of items) if (it && matchesFilters(it, supplierFilter, pg)) supplierRows.push(it);
 
       nextToken = data?.listSupplierMaps?.nextToken ?? null;
     } while (nextToken);
@@ -261,12 +261,10 @@ export async function GET(req: Request) {
 
     // 2) Stock truth from /api/inventory/availability
     const origin = new URL(req.url).origin;
-
-    // NOTE: pass the supplier SKUs we have; your availability route already handles alias resolution
     const stock = await loadAvailability(origin, mid, supplierSkus);
 
-    // 3) Velocity from SalesLine across multiple windows (single scan)
-    const maxWindow = windows[windows.length - 1] ?? 30;
+    // 3) Velocity windows: compute once, fill many
+    const maxWindow = windows[windows.length - 1] ?? baseDays;
     const fromIsoMin = subtractDaysIsoFromLondonMidnight(maxWindow);
 
     // Precompute window start times
@@ -278,8 +276,6 @@ export async function GET(req: Request) {
     for (const d of windows) soldUnitsByDays.set(d, new Map<string, number>());
 
     // Freshness:
-    // - maxSalesAtIsoAll: latest timestamp for this marketplace (even if sku doesn't match supplier)
-    // - maxSalesAtIsoMatched: latest timestamp among lines that matched supplier sku/alias
     let maxSalesAtIsoAll: string | null = null;
     let maxSalesAtIsoMatched: string | null = null;
 
@@ -297,9 +293,9 @@ export async function GET(req: Request) {
         if (String(it.marketplaceId ?? "").trim() !== mid) continue;
 
         const at = lineAtIso(it);
-        if (!at) continue;
-
-        if (!maxSalesAtIsoAll || at > maxSalesAtIsoAll) maxSalesAtIsoAll = at;
+        if (at) {
+          if (!maxSalesAtIsoAll || at > maxSalesAtIsoAll) maxSalesAtIsoAll = at;
+        }
 
         const salesSkuRaw = normSku(it.sku);
         if (!salesSkuRaw) continue;
@@ -308,17 +304,19 @@ export async function GET(req: Request) {
         const full = aliasToFull[salesSkuRaw];
         if (!full || !fullSet.has(full)) continue;
 
-        if (!maxSalesAtIsoMatched || at > maxSalesAtIsoMatched) maxSalesAtIsoMatched = at;
+        if (at) {
+          if (!maxSalesAtIsoMatched || at > maxSalesAtIsoMatched) maxSalesAtIsoMatched = at;
+        }
 
-        // Ignore anything older than the largest window we’re computing
-        if (at < fromIsoMin) continue;
+        // Below the largest window => ignore for totals
+        if (!at || at < fromIsoMin) continue;
 
         const qty = safeNum(it.qty);
 
-        // Add qty into every window bucket that includes this timestamp
         for (const d of windows) {
-          const startIso = fromIsoByDays.get(d)!;
-          if (at >= startIso) {
+          const fromIso = fromIsoByDays.get(d);
+          if (!fromIso) continue;
+          if (at >= fromIso) {
             const m = soldUnitsByDays.get(d)!;
             m.set(full, (m.get(full) ?? 0) + qty);
           }
@@ -338,34 +336,22 @@ export async function GET(req: Request) {
     const rows = supplierSkus.map((fullSku) => {
       const sm = supplierByFullSku.get(fullSku) ?? {};
 
-      // Stock maps are keyed by the requested sku string from availability route
       const available = safeNum(stock.availability[fullSku]);
       const inbound = safeNum(stock.inbound[fullSku]);
       const reserved = safeNum(stock.reserved[fullSku]);
 
       const stockForCover = Math.max(0, available + inbound);
 
-      // Baseline: always 30d
-      const sold30 = safeNum(soldUnitsByDays.get(30)?.get(fullSku) ?? 0);
-      const vel30 = sold30 / 30;
-
-      // Requested window: cover/order calculations & table display
       const soldReq = safeNum(soldUnitsByDays.get(requestedDays)?.get(fullSku) ?? 0);
-      const velReq = soldReq / requestedDays;
+      const dailyVelReq = soldReq / requestedDays;
 
-      // Optional extra windows (e.g. 2d/7d for repricer)
-      const extras: Record<string, any> = {};
-      for (const d of windows) {
-        if (d === 30 || d === requestedDays) continue;
-        const s = safeNum(soldUnitsByDays.get(d)?.get(fullSku) ?? 0);
-        extras[`soldUnits${d}d`] = s;
-        extras[`dailyVel${d}d`] = s / d;
-      }
+      const sold30 = safeNum(soldUnitsByDays.get(baseDays)?.get(fullSku) ?? 0);
+      const dailyVel30 = sold30 / baseDays;
 
-      const projectedSales = soldReq;
-      const projectedBalance = stockForCover - projectedSales;
+      const projectedSalesReq = soldReq;
+      const projectedBalance = stockForCover - projectedSalesReq;
 
-      const daysOfCover = velReq > 0 ? stockForCover / velReq : null;
+      const daysOfCover = dailyVelReq > 0 ? stockForCover / dailyVelReq : null;
 
       const leadTimeDays = (() => {
         const raw = (sm as any)?.leadTimeDays;
@@ -376,6 +362,14 @@ export async function GET(req: Request) {
       const daysToOrder = daysOfCover == null ? null : Math.max(0, daysOfCover - leadTimeDays);
 
       const unitCost = safeNum(sm.productCost) + safeNum(sm.prepCost) + safeNum(sm.shippingCost);
+
+      // Optional window stats (only if requested via extra=)
+      const windowStats: Record<string, { soldUnits: number; dailyVel: number }> = {};
+      for (const d of windows) {
+        if (d === requestedDays) continue; // already exposed as soldUnits/dailyVel
+        const sold = safeNum(soldUnitsByDays.get(d)?.get(fullSku) ?? 0);
+        windowStats[String(d)] = { soldUnits: sold, dailyVel: sold / d };
+      }
 
       return {
         sku: fullSku,
@@ -391,15 +385,16 @@ export async function GET(req: Request) {
 
         unitCost,
 
-        // Requested window (UI)
+        // Primary (requested days)
         soldUnits: soldReq,
-        dailyVel: velReq,
+        dailyVel: dailyVelReq,
 
-        // Always-on baseline (repricer/analytics)
-        soldUnits30: sold30,
-        dailyVel30: vel30,
+        // Baseline always available (30d)
+        soldUnits30d: sold30,
+        dailyVel30d: dailyVel30,
 
-        ...extras,
+        // Optional additional windows
+        windows: windowStats,
       };
     });
 
@@ -408,9 +403,7 @@ export async function GET(req: Request) {
     const invAgeMinutes =
       stock.maxUpdatedAtIso ? Math.max(0, Math.round((now - new Date(stock.maxUpdatedAtIso).getTime()) / 60000)) : null;
 
-    // Prefer matched freshness, fall back to marketplace freshness
     const salesMaxAtIso = maxSalesAtIsoMatched ?? maxSalesAtIsoAll;
-
     const salesAgeMinutes =
       salesMaxAtIso ? Math.max(0, Math.round((now - new Date(salesMaxAtIso).getTime()) / 60000)) : null;
 
@@ -434,3 +427,4 @@ export async function GET(req: Request) {
     return NextResponse.json({ ok: false, error: String(e?.message ?? e) }, { status: 500 });
   }
 }
+

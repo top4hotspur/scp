@@ -2,13 +2,8 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
 import { NextResponse } from "next/server";
-import outputs from "@/amplify_outputs.json";
-
+import { DATA_URL, DATA_API_KEY } from "@/lib/dataEnv";
 export const runtime = "nodejs";
-
-const DATA_URL = (outputs as any)?.data?.url ?? process.env.DATA_URL;
-const DATA_API_KEY = (outputs as any)?.data?.api_key ?? process.env.DATA_API_KEY;
-
 type GqlResp<T> = { data?: T; errors?: { message: string }[] };
 
 async function gql<T>(query: string, variables?: any): Promise<T> {
@@ -82,3 +77,4 @@ export async function PUT(req: Request) {
     return NextResponse.json({ ok: false, error: String(e?.message ?? e) }, { status: 500 });
   }
 }
+

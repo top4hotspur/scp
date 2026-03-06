@@ -1,11 +1,7 @@
 // app/api/inventory/ingest/route.ts
 import { NextResponse } from "next/server";
-import outputs from "@/amplify_outputs.json";
+import { DATA_URL, DATA_API_KEY } from "@/lib/dataEnv";
 import { spapiFetch } from "@/lib/spapi/request";
-
-const DATA_URL = outputs.data.url;
-const DATA_API_KEY = outputs.data.api_key;
-
 type GqlResp<T> = { data?: T; errors?: { message: string }[] };
 
 async function gql<T>(query: string, variables?: any): Promise<T> {
@@ -171,3 +167,4 @@ const updatedAtIso = new Date().toISOString();
     return NextResponse.json({ ok: false, error: String(e?.message ?? e) }, { status: 500 });
   }
 }
+

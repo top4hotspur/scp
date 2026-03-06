@@ -99,7 +99,7 @@ export async function POST(req: Request) {
 
     const lastRun = safeJson<Record<string, string>>(settings.reportLastRunByKeyJson ?? "{}", {});
 
-    // Marketplaces (we’ll run these per marketplace; combined views are computed from stored lines)
+    // Marketplaces (weâ€™ll run these per marketplace; combined views are computed from stored lines)
     const ukMid = String(settings.ukMarketplaceId ?? "").trim();
     const euMids = safeJson<string[]>(settings.euMarketplaceIdsJson ?? "[]", []);
     const mids = [ukMid, ...euMids].filter(Boolean);
@@ -133,7 +133,7 @@ export async function POST(req: Request) {
   // Shipped/confirmed sales backbone
   await runReport("SALES_FBA_INVOICING", mid, "/api/sales/reports/fba-invoicing/download");
 
-  // “Today so far” (unshipped) — includes everything since midnight (handled inside the endpoint)
+  // â€œToday so farâ€ (unshipped) â€” includes everything since midnight (handled inside the endpoint)
   await runReport("SALES_ORDERS", mid, "/api/sales/reports/orders/download");
 
   // Build SalesSnapshot after Orders ingest (keeps UI live)

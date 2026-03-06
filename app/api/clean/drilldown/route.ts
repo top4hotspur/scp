@@ -1,9 +1,5 @@
 import { NextResponse } from "next/server";
-import outputs from "@/amplify_outputs.json";
-
-const DATA_URL = outputs.data.url;
-const DATA_API_KEY = outputs.data.api_key;
-
+import { DATA_URL, DATA_API_KEY } from "@/lib/dataEnv";
 type GqlResp = { data?: any; errors?: { message: string }[] };
 
 async function gql(query: string, variables?: any): Promise<any> {
@@ -210,3 +206,5 @@ marketplace: marketplaceName(String(x.marketplaceId ?? "").trim()),
     return NextResponse.json({ ok: false, error: String(e?.message ?? e) }, { status: 500 });
   }
 }
+
+

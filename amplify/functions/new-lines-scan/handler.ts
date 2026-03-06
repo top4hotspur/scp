@@ -131,7 +131,7 @@ function estimateProfit(params: {
 }): number {
   const referral = params.sellPrice * params.referralRate;
 
-  // Placeholder conservative FBA fee (we’ll replace with Fees pipeline later)
+  // Placeholder conservative FBA fee (weâ€™ll replace with Fees pipeline later)
   const fbaConservative = 2.75;
 
   const profit =
@@ -178,7 +178,7 @@ const UPSERT_CACHE = /* GraphQL */ `
   }
 `;
 
-// If the record already exists, create may fail. We’ll delete+create later if needed,
+// If the record already exists, create may fail. Weâ€™ll delete+create later if needed,
 // but simplest: use update when exists.
 const UPDATE_CACHE = /* GraphQL */ `
   mutation Update($input: UpdateProductScanCacheInput!) {
@@ -437,7 +437,7 @@ for (const ean of batch) {
 
           const baseSales = bsr && bsr > 0 ? calculateSales(bsr, categoryHint) : null;
 
-          // NOTE: We treat non-UK as “EU multiplier” here; later we’ll detect actual region properly
+          // NOTE: We treat non-UK as â€œEU multiplierâ€ here; later weâ€™ll detect actual region properly
           const isUk = mid === "A1F83G8C2ARO7P";
           const estMonthlySales = baseSales ? Math.round(baseSales * (isUk ? 1.0 : settings.euSalesMultiplier)) : null;
 

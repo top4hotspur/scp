@@ -1,28 +1,9 @@
 //app/api/settings/app/route.ts
 import { NextResponse } from "next/server";
-import outputs from "@/amplify_outputs.json";
-
-const DATA_URL = outputs.data.url;
-const DATA_API_KEY = outputs.data.api_key;
-
+import { gql } from "@/lib/appsyncGql";
 type GqlResp<T> = { data?: T; errors?: { message: string }[] };
 
-async function gql<T>(query: string, variables?: any): Promise<T> {
-  if (!DATA_URL || !DATA_API_KEY) throw new Error("Missing amplify_outputs.json data.url/api_key");
 
-  const res = await fetch(DATA_URL, {
-    method: "POST",
-    headers: { "content-type": "application/json", "x-api-key": DATA_API_KEY },
-    body: JSON.stringify({ query, variables }),
-    cache: "no-store",
-  });
-
-  const json = (await res.json().catch(() => ({}))) as GqlResp<T>;
-  if (!res.ok || json.errors?.length) {
-    throw new Error(json.errors?.map((e) => e.message).join(" | ") || `HTTP ${res.status}`);
-  }
-  return json.data as T;
-}
 
 const GET_ONE = /* GraphQL */ `
   query GetAppSettings($id: ID!) {
@@ -185,3 +166,5 @@ const input = {
     return NextResponse.json({ ok: false, error: String(e?.message ?? e) }, { status: 500 });
   }
 }
+
+

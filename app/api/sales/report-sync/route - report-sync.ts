@@ -95,7 +95,7 @@ export async function POST(req: Request) {
     const url = String(doc?.url ?? "");
     if (!url) throw new Error("Report document missing url");
 
-    // 4) download (most order reports are plain TSV; if compressionAlgorithm exists, we’ll handle later)
+    // 4) download (most order reports are plain TSV; if compressionAlgorithm exists, weâ€™ll handle later)
     const raw = await fetch(url, { cache: "no-store" }).then((r) => r.text());
 
     const lines = raw.split(/\r?\n/).filter((l) => l.trim().length);
@@ -104,7 +104,7 @@ export async function POST(req: Request) {
     const header = parseTsvLine(lines[0]).map((h) => h.toLowerCase());
     const idx = (name: string) => header.indexOf(name.toLowerCase());
 
-    // Common columns in this report (varies slightly, we’ll adapt once we see real output)
+    // Common columns in this report (varies slightly, weâ€™ll adapt once we see real output)
     const iOrder = idx("order-id");
     const iSku = idx("sku");
     const iQty = idx("quantity-purchased");
@@ -153,7 +153,7 @@ export async function POST(req: Request) {
         itemPrice: iItemPrice >= 0 ? numMaybe(String(cols[iItemPrice] ?? "")) : null,
         shippingPrice: iShipPrice >= 0 ? numMaybe(String(cols[iShipPrice] ?? "")) : null,
 
-        // you can add a field later in model for this, or keep a “status” in totalsJson only
+        // you can add a field later in model for this, or keep a â€œstatusâ€ in totalsJson only
         // orderStatus: status,
       };
 

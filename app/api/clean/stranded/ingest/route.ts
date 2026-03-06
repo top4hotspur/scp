@@ -1,13 +1,9 @@
 //app/api/clean/stranded/ingest/route.ts
 import { NextResponse } from "next/server";
-import outputs from "@/amplify_outputs.json";
+import { DATA_URL, DATA_API_KEY } from "@/lib/dataEnv";
 import fs from "fs";
 import path from "path";
 export const runtime = "nodejs";
-
-const DATA_URL = outputs.data.url;
-const DATA_API_KEY = outputs.data.api_key;
-
 async function gql(query: string, variables?: any): Promise<any> {
   const res = await fetch(DATA_URL, {
     method: "POST",
@@ -172,3 +168,4 @@ return NextResponse.json({
     return NextResponse.json({ ok: false, error: String(e?.message ?? e) }, { status: 500 });
   }
 }
+

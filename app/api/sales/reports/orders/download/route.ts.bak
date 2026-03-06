@@ -1,4 +1,4 @@
-// app/api/sales/reports/orders/download/route.ts
+﻿// app/api/sales/reports/orders/download/route.ts
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
 import { NextResponse } from "next/server";
@@ -7,9 +7,8 @@ import { spapi, downloadAndDecryptReportDocument, parseTsv, decodeReportText } f
 
 export const runtime = "nodejs";
 
-const DATA_URL = outputs.data.url;
-const DATA_API_KEY = outputs.data.api_key;
-
+const DATA_URL = (outputs as any)?.data?.url;
+const DATA_API_KEY = (outputs as any)?.data?.api_key;
 type GqlResp<T> = { data?: T; errors?: { message: string }[] };
 
 async function gql<T>(query: string, variables?: any): Promise<T> {
@@ -378,7 +377,7 @@ export async function POST(req: Request) {
 
 const base = input as Record<string, any>;
 
-// Only send fields that exist in CreateSalesLineInput (prevents “unknown field” errors)
+// Only send fields that exist in CreateSalesLineInput (prevents â€œunknown fieldâ€ errors)
 const pruned: Record<string, any> = {};
 for (const k of Object.keys(base)) {
   if (spec.fieldNames.has(k)) pruned[k] = base[k];
@@ -413,7 +412,7 @@ try {
             continue;
           }
 
-          // Real error — surface it
+          // Real error â€” surface it
           errorCount++;
           skipped++;
 
@@ -494,3 +493,4 @@ const fromIso = startOfToday.toISOString();
     return NextResponse.json({ ok: false, error: String(e?.message ?? e) }, { status: 500 });
   }
 }
+

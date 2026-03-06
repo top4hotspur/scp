@@ -1,4 +1,4 @@
-SCP tree (clean) @ 2026-03-04 14:48:37
+SCP tree (clean) @ 2026-03-05 13:22:18
 ?? amplify
   ?? data
     ?? InventorySnapshot
@@ -23,6 +23,8 @@ SCP tree (clean) @ 2026-03-04 14:48:37
     ?? cost
       ?? add
       ?? rollup
+    ?? debug
+      ?? dataenv
     ?? fees
       ?? estimate
     ?? hello

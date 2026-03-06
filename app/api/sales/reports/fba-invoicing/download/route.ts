@@ -1,12 +1,8 @@
 //app/api/sales/reports/fba-invoicing/download/route.ts
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { NextResponse } from "next/server";
-import outputs from "@/amplify_outputs.json";
+import { DATA_URL, DATA_API_KEY } from "@/lib/dataEnv";
 import { spapi, downloadAndDecryptReportDocument, parseTsv, decodeReportText } from "@/app/api/sales/reports/_spapi";
-
-const DATA_URL = outputs.data.url;
-const DATA_API_KEY = outputs.data.api_key;
-
 type GqlResp<T> = { data?: T; errors?: { message: string }[] };
 
 async function gql<T>(query: string, variables?: any): Promise<T> {
@@ -153,7 +149,7 @@ function rowToSalesLineInput(mid: string, row: Record<string, string>, sm: any) 
     "1";
   const qty = Math.max(1, Math.trunc(Number(qtyRaw) || 1));
 
-  // Money fields — name variations exist. We map the common “item price/tax + delivery price/tax + promo discount”
+  // Money fields Ã¢â‚¬â€ name variations exist. We map the common Ã¢â‚¬Å“item price/tax + delivery price/tax + promo discountÃ¢â‚¬Â
   const itemPrice = numMaybe(pick(row, "item-price", "item price"));
   const itemTax = numMaybe(pick(row, "item-tax", "item tax"));
   const shippingPrice = numMaybe(pick(row, "delivery-price", "delivery price", "shipping-price", "shipping price"));
@@ -268,7 +264,7 @@ export async function POST(req: Request) {
             skipped++;
             continue;
           }
-          // keep going (don’t kill entire run)
+          // keep going (donÃ¢â‚¬â„¢t kill entire run)
           skipped++;
         }
       }
@@ -358,3 +354,4 @@ export async function POST(req: Request) {
     return NextResponse.json({ ok: false, error: String(e?.message ?? e) }, { status: 500 });
   }
 }
+

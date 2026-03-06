@@ -1,9 +1,6 @@
+//app/api/clean/snapshot/route.ts
 import { NextResponse } from "next/server";
-import outputs from "@/amplify_outputs.json";
-
-const DATA_URL = outputs.data.url;
-const DATA_API_KEY = outputs.data.api_key;
-
+import { DATA_URL, DATA_API_KEY } from "@/lib/dataEnv";
 type GqlResp<T> = { data?: T; errors?: { message: string }[] };
 
 async function gql<T>(query: string, variables?: any): Promise<T> {
@@ -76,21 +73,45 @@ export async function GET(req: Request) {
     const data = await gql<any>(GET_SNAPSHOT, { marketplaceId: mid, bucket: "latest" });
     const snap = data?.getCleanListingSnapshot ?? null;
 
-    // Overlay counts (STRANDED -> "Fulfillment issue")
-let fulfillmentIssueCount = 0;
+    // Overlay counts from CleanListingIssue (ALL issue types)
+let issues: any[] = [];
 try {
-  const issues = await listAll(LIST_STRANDED_ISSUES, "listCleanListingIssues", {
-    filter: { marketplaceId: { eq: mid }, issueType: { eq: "STRANDED" } },
+  issues = await listAll(LIST_STRANDED_ISSUES, "listCleanListingIssues", {
+    filter: { marketplaceId: { eq: mid } },
   });
-  fulfillmentIssueCount = issues.length;
 } catch {
-  // never fail snapshot if overlay fails
-  fulfillmentIssueCount = 0;
+  issues = [];
 }
 
+// Count issues by issueType (and unique SKU counts by issueType)
+const issueCountsByType: Record<string, number> = {};
+const issueSkuSetsByType: Record<string, Set<string>> = {};
+
+for (const it of issues) {
+  const t = String(it?.issueType ?? "UNKNOWN");
+  issueCountsByType[t] = (issueCountsByType[t] ?? 0) + 1;
+
+  if (!issueSkuSetsByType[t]) issueSkuSetsByType[t] = new Set<string>();
+  const sku = String(it?.sku ?? "");
+  if (sku) issueSkuSetsByType[t].add(sku);
+}
+
+const issueSkuCountsByType: Record<string, number> = {};
+for (const [t, set] of Object.entries(issueSkuSetsByType)) issueSkuCountsByType[t] = set.size;
+
+// Keep your existing status counts from snapshot
 const baseCounts = safeJsonParse<Record<string, number>>(snap?.countsByStatusJson ?? "{}", {});
+
+// Add overlay buckets for the UI (human-friendly)
 const overlayCounts: Record<string, number> = {};
-if (fulfillmentIssueCount > 0) overlayCounts["Fulfillment issue"] = fulfillmentIssueCount;
+if ((issueSkuCountsByType["STRANDED"] ?? 0) > 0) overlayCounts["Fulfillment issue"] = issueSkuCountsByType["STRANDED"];
+if ((issueSkuCountsByType["QUOTA_EXCEEDED"] ?? 0) > 0) overlayCounts["Rate limited"] = issueSkuCountsByType["QUOTA_EXCEEDED"];
+if ((issueSkuCountsByType["ASIN_NOT_OFFERABLE"] ?? 0) > 0) overlayCounts["Blocked / inactive"] = issueSkuCountsByType["ASIN_NOT_OFFERABLE"];
+if ((issueSkuCountsByType["SKU_NOT_IN_MARKETPLACE"] ?? 0) > 0) overlayCounts["Not in marketplace"] = issueSkuCountsByType["SKU_NOT_IN_MARKETPLACE"];
+if ((issueSkuCountsByType["MISSING_ASIN"] ?? 0) > 0) overlayCounts["Missing ASIN"] = issueSkuCountsByType["MISSING_ASIN"];
+
+// Optionally return a small list for the table (cap it to keep it cheap)
+const issuesSample = issues.slice(0, 200);
 
 // combinedCounts = base + overlay (overlay adds a bucket, doesn't change Active/Inactive)
 const combinedCounts: Record<string, number> = { ...baseCounts };
@@ -101,8 +122,14 @@ return NextResponse.json({
   snapshot: snap,
   overlayCounts,
   combinedCounts,
+
+  // NEW
+  issueCountsByType,
+  issueSkuCountsByType,
+  issues: issuesSample,
 });
   } catch (e: any) {
     return NextResponse.json({ ok: false, error: String(e?.message ?? e) }, { status: 500 });
   }
 }
+

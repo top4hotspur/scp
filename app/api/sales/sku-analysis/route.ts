@@ -1,10 +1,6 @@
 //app/api/sales/sku-analysis/route.ts
 import { NextResponse } from "next/server";
-import outputs from "@/amplify_outputs.json";
-
-const DATA_URL = outputs.data.url;
-const DATA_API_KEY = outputs.data.api_key;
-
+import { DATA_URL, DATA_API_KEY } from "@/lib/dataEnv";
 type GqlResp<T> = { data?: T; errors?: { message: string }[] };
 
 async function gql<T>(query: string, variables?: Record<string, unknown>): Promise<T> {
@@ -132,7 +128,7 @@ export async function GET(req: Request) {
             ? Number(x.profitExVat)
             : revenueExVat - costs;
 
-        // For chart we want a “sale price” proxy:
+        // For chart we want a Ã¢â‚¬Å“sale priceÃ¢â‚¬Â proxy:
         // If itemPrice exists, use that; else use revenueExVat.
         const price = Number.isFinite(Number(x.itemPrice)) && x.itemPrice != null ? Number(x.itemPrice) : revenueExVat;
 
@@ -160,3 +156,4 @@ export async function GET(req: Request) {
     return NextResponse.json({ ok: false, error: e?.message || String(e) }, { status: 500 });
   }
 }
+

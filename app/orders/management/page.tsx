@@ -58,7 +58,7 @@ type OptionsResp = {
 
 function money(n: any) {
   const v = Number(n);
-  if (!Number.isFinite(v)) return "—";
+  if (!Number.isFinite(v)) return "â€”";
   return v.toFixed(2);
 }
 
@@ -182,7 +182,7 @@ export default function Page() {
 
   async function downloadCsvs() {
     if (!draft?.id) {
-      setError("No draft PO yet — select marketplace + supplier first.");
+      setError("No draft PO yet â€” select marketplace + supplier first.");
       return;
     }
     setLoading(true);
@@ -263,7 +263,7 @@ useEffect(() => {
     <div className="space-y-4">
       <div className="flex items-start justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-semibold">Orders • Management</h1>
+          <h1 className="text-2xl font-semibold">Orders â€¢ Management</h1>
           <p className="text-white/60">Draft Purchase Order (snapshot-first, no SP-API).</p>
         </div>
 
@@ -325,7 +325,7 @@ useEffect(() => {
             onChange={(e) => setSupplier(e.target.value)}
             className="mt-2 w-full rounded-xl border border-white/10 bg-black/30 px-3 py-2 text-sm outline-none"
           >
-            <option value="">Select supplier…</option>
+            <option value="">Select supplierâ€¦</option>
             {suppliers.map((s) => (
               <option key={s} value={s}>
                 {s}
@@ -334,7 +334,7 @@ useEffect(() => {
           </select>
 
           <div className="mt-1 text-[11px] text-white/40">
-            Bucket: {draftSuffix || "—"}
+            Bucket: {draftSuffix || "â€”"}
           </div>
         </div>
 
@@ -360,10 +360,10 @@ useEffect(() => {
             title="Load this draft"
           >
             <div className="text-sm text-white">
-              {midLabel} • {d.supplier}
+              {midLabel} â€¢ {d.supplier}
             </div>
             <div className="text-[11px] text-white/50">
-              bucket: {d.draftSuffix || "—"} · {d.totalUnits} units
+              bucket: {d.draftSuffix || "â€”"} Â· {d.totalUnits} units
             </div>
           </button>
         );
@@ -380,14 +380,14 @@ useEffect(() => {
       <div className="rounded-2xl border border-white/10 bg-white/5 p-3">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div className="text-sm text-white/70">
-            Draft: <span className="text-white">{draft?.id ?? "—"}</span>{" "}
-            <span className="text-white/40">({draft?.status ?? "—"})</span>
+            Draft: <span className="text-white">{draft?.id ?? "â€”"}</span>{" "}
+            <span className="text-white/40">({draft?.status ?? "â€”"})</span>
             <span className="ml-3 text-white/40">
-              {supplier ? `${supplier} • ${midLabel} • ${draftSuffix}` : ""}
+              {supplier ? `${supplier} â€¢ ${midLabel} â€¢ ${draftSuffix}` : ""}
             </span>
           </div>
           <div className="text-sm text-white/70">
-            Totals: <span className="text-white">{totals.units}</span> units ·{" "}
+            Totals: <span className="text-white">{totals.units}</span> units Â·{" "}
             <span className="text-white">{money(totals.value)}</span>
           </div>
         </div>

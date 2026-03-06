@@ -174,7 +174,7 @@ export default function SettingsApp() {
     return (
       <div className="p-4">
         <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
-          <div className="text-lg font-semibold">Settings • App</div>
+          <div className="text-lg font-semibold">Settings â€¢ App</div>
           <div className="text-sm opacity-70 mt-1">Inventory cadence & marketplace config.</div>
 
           {err && <div className="mt-3 rounded-2xl border border-red-400/20 bg-red-500/5 p-3 text-sm">{err}</div>}
@@ -197,7 +197,7 @@ export default function SettingsApp() {
       <div className="rounded-2xl border border-white/10 bg-white/5 shadow-sm">
         <div className="px-4 py-3 flex items-start justify-between gap-3 border-b border-white/10">
           <div>
-            <div className="text-lg font-semibold">Settings • App</div>
+            <div className="text-lg font-semibold">Settings â€¢ App</div>
             <div className="text-xs opacity-70 mt-1">
               Keep costs low: cadence controls + active-only gating. EU totals use a single anchor (default Germany).
             </div>
@@ -411,7 +411,7 @@ export default function SettingsApp() {
           <div className="rounded-2xl border border-white/10 bg-black/20 p-3">
             <div className="text-xs opacity-80">Debug (read-only)</div>
             <div className="mt-2 text-[11px] leading-4 opacity-80 whitespace-pre-wrap">
-              id={s.id} · updatedAt={s.updatedAtIso}
+              id={s.id} Â· updatedAt={s.updatedAtIso}
               {"\n"}euMarketplaceIdsJson={s.euMarketplaceIdsJson}
             </div>
           </div>

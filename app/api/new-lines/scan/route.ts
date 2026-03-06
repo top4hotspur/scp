@@ -1,21 +1,21 @@
-// app/api/new-lines/scan/route.ts
+//app/api/new-lines/scan/route.ts
 import { NextResponse } from "next/server";
-import outputs from "@/amplify_outputs.json";
+import { NEWLINES_API_ENDPOINT, requireNewLinesEndpoint } from "@/lib/dataEnv";
 
-function getNewLinesEndpoint(): string {
-  // Your backend.ts output shape is:
-  // custom.API.newLinesApi.endpoint = "https://.../dev/"
-  const ep = (outputs as any)?.custom?.API?.newLinesApi?.endpoint;
-  if (!ep) throw new Error("Missing outputs.custom.API.newLinesApi.endpoint in amplify_outputs.json");
-  return String(ep).replace(/\/+$/, ""); // trim trailing slash
+export const runtime = "nodejs";
+
+function buildScanUrl(): string {
+  requireNewLinesEndpoint();
+  const base = NEWLINES_API_ENDPOINT.replace(/\/+$/, "");
+  return `${base}/new-lines/scan`;
 }
 
 export async function POST(req: Request) {
   try {
     const body = await req.json().catch(() => ({} as any));
-    const endpoint = getNewLinesEndpoint();
+    const url = buildScanUrl();
 
-    const res = await fetch(`${endpoint}/new-lines/scan`, {
+    const res = await fetch(url, {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify(body),
@@ -25,7 +25,7 @@ export async function POST(req: Request) {
     const json = await res.json().catch(() => ({}));
     if (!res.ok) {
       return NextResponse.json(
-        { ok: false, error: json?.error ?? `HTTP ${res.status}`, raw: json },
+        { ok: false, error: `HTTP ${res.status}`, raw: json, url },
         { status: 500 }
       );
     }

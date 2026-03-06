@@ -1,31 +1,8 @@
 //app/api/viewer/heartbeat/route.ts
 import { NextResponse } from "next/server";
-import outputs from "@/amplify_outputs.json";
-
-const DATA_URL = outputs.data.url;
-const DATA_API_KEY = outputs.data.api_key;
-
+import { gql } from "@/lib/appsyncGql";
 type GqlResp<T> = { data?: T; errors?: { message: string }[] };
 
-async function gql<T>(query: string, variables?: any): Promise<T> {
-  if (!DATA_URL || !DATA_API_KEY) throw new Error("Missing amplify_outputs.json data.url/api_key");
-
-  const res = await fetch(DATA_URL, {
-    method: "POST",
-    headers: {
-      "content-type": "application/json",
-      "x-api-key": DATA_API_KEY,
-    },
-    body: JSON.stringify({ query, variables }),
-    cache: "no-store",
-  });
-
-  const json = (await res.json().catch(() => ({}))) as GqlResp<T>;
-  if (!res.ok || json.errors?.length) {
-    throw new Error(json.errors?.map((e) => e.message).join(" | ") || `HTTP ${res.status}`);
-  }
-  return json.data as T;
-}
 
 const GET_VIEWER = /* GraphQL */ `
   query GetViewer($id: ID!) {
@@ -93,3 +70,5 @@ export async function GET() {
   const data = await gql<{ getViewerSession: any }>(GET_VIEWER, { id }).catch(() => ({ getViewerSession: null }));
   return NextResponse.json({ ok: true, viewer: data?.getViewerSession ?? null });
 }
+
+

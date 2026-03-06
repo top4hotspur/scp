@@ -59,7 +59,7 @@ export function CostHud() {
         className="cursor-pointer select-none rounded-t-xl border border-white/15 bg-black/70 px-3 py-2 text-xs font-semibold backdrop-blur-xl"
         onClick={() => setOpen((v) => !v)}
       >
-        Cost HUD {open ? "▾" : "▸"}
+        Cost HUD {open ? "â–¾" : "â–¸"}
       </div>
 
       {open && (

@@ -1,14 +1,10 @@
 //api/cost/add/route.ts
 import { NextResponse } from "next/server";
-import outputs from "@/amplify_outputs.json";
-
-const DATA_URL = outputs.data.url;
-const DATA_API_KEY = outputs.data.api_key;
-
+import { DATA_URL, DATA_API_KEY } from "@/lib/dataEnv";
 type GqlResp<T> = { data?: T; errors?: { message: string }[] };
 
 async function gql<T>(query: string, variables?: any): Promise<T> {
-  if (!DATA_URL || !DATA_API_KEY) throw new Error("Missing amplify_outputs.json data.url/api_key");
+  if (!DATA_URL || !DATA_API_KEY) throw new Error("Missing DATA_URL / DATA_API_KEY");
 
   const res = await fetch(DATA_URL, {
     method: "POST",
@@ -118,3 +114,5 @@ try {
 
   return NextResponse.json({ ok: true, day, key, addUsd, addUnits });
 }
+
+

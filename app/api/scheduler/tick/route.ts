@@ -2,31 +2,11 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
 import { NextResponse } from "next/server";
-import outputs from "@/amplify_outputs.json";
-
+import { gql } from "@/lib/appsyncGql";
 export const runtime = "nodejs";
-
-const DATA_URL = (outputs as any)?.data?.url ?? process.env.DATA_URL;
-const DATA_API_KEY = (outputs as any)?.data?.api_key ?? process.env.DATA_API_KEY;
-
 type GqlResp<T> = { data?: T; errors?: { message: string }[] };
 
-async function gql<T>(query: string, variables?: any): Promise<T> {
-  if (!DATA_URL || !DATA_API_KEY) throw new Error("Missing DATA_URL / DATA_API_KEY");
 
-  const res = await fetch(DATA_URL, {
-    method: "POST",
-    headers: { "content-type": "application/json", "x-api-key": DATA_API_KEY },
-    body: JSON.stringify({ query, variables }),
-    cache: "no-store",
-  });
-
-  const json = (await res.json().catch(() => ({}))) as GqlResp<T>;
-  if (!res.ok || json.errors?.length) {
-    throw new Error(json.errors?.map((e) => e.message).join(" | ") || `HTTP ${res.status}`);
-  }
-  return json.data as T;
-}
 
 function safeJson<T>(s: any, fallback: T): T {
   try {
@@ -106,8 +86,6 @@ const GET_SETTINGS = /* GraphQL */ `
       reportDayEndHour
       reportCadenceByReportJson
 
-      # "Witness panel" maps (one of these already exists in your schema)
-      lastRunByKeyJson
       inventoryLastRunByKeyJson
     }
   }
@@ -117,7 +95,6 @@ const UPDATE_SETTINGS = /* GraphQL */ `
   mutation UpdateAppSettings($input: UpdateAppSettingsInput!) {
     updateAppSettings(input: $input) {
       id
-      lastRunByKeyJson
       inventoryLastRunByKeyJson
     }
   }
@@ -136,43 +113,35 @@ async function stampLastRun(settingsId: string, settingsObj: any, key: string) {
   const iso = getNowIso();
 
   // Prefer "lastRunByKeyJson" if present, else fall back to your existing map.
-  const hasLastRun = typeof settingsObj?.lastRunByKeyJson !== "undefined";
   const hasInventoryRun = typeof settingsObj?.inventoryLastRunByKeyJson !== "undefined";
+if (!hasInventoryRun) return;
 
-  // Attempt both, safely.
-  const input: any = { id: settingsId };
+const input: any = { id: settingsId };
+input.inventoryLastRunByKeyJson = JSON.stringify(mergeRunMap(settingsObj.inventoryLastRunByKeyJson, key, iso));
 
-  if (hasLastRun) input.lastRunByKeyJson = JSON.stringify(mergeRunMap(settingsObj.lastRunByKeyJson, key, iso));
-  if (hasInventoryRun) input.inventoryLastRunByKeyJson = JSON.stringify(mergeRunMap(settingsObj.inventoryLastRunByKeyJson, key, iso));
-
-  // If neither exists, do nothing.
-  if (Object.keys(input).length === 1) return;
-
-  try {
-    await gql(UPDATE_SETTINGS, { input });
-    // also update local copy so subsequent stamps merge properly
-    if (hasLastRun) settingsObj.lastRunByKeyJson = input.lastRunByKeyJson;
-    if (hasInventoryRun) settingsObj.inventoryLastRunByKeyJson = input.inventoryLastRunByKeyJson;
-  } catch {
-    // schema might not include one of the fields; ignore
-  }
+try {
+  await gql(UPDATE_SETTINGS, { input });
+  settingsObj.inventoryLastRunByKeyJson = input.inventoryLastRunByKeyJson;
+} catch {
+  // schema might not include the field; ignore
+}
 }
 
 function defaultCadence(): CadenceMap {
   // STK-cheap defaults; UI can override via reportCadenceByReportJson
   return {
-  "inventory.ingest": { enabled: true, dayMinutes: 60, nightMinutes: 180 },
-  "inventory.snapshot": { enabled: true, dayMinutes: 60, nightMinutes: 180 },
+    "inventory.ingest": { enabled: true, dayMinutes: 60, nightMinutes: 180 },
+    "inventory.snapshot": { enabled: true, dayMinutes: 60, nightMinutes: 180 },
 
-  "sales.orders": { enabled: true, dayMinutes: 15, nightMinutes: 120 },
-  "sales.snapshot": { enabled: true, dayMinutes: 15, nightMinutes: 120 },
+    "sales.orders": { enabled: true, dayMinutes: 15, nightMinutes: 120 },
+    "sales.snapshot": { enabled: true, dayMinutes: 15, nightMinutes: 120 },
 
-  "fee.estimate": { enabled: true, dayMinutes: 480, nightMinutes: 960 },
+    "fee.estimate": { enabled: true, dayMinutes: 480, nightMinutes: 960 },
 
-  // NEW — Repricer
-  "repricer.uk": { enabled: true, dayMinutes: 15, nightMinutes: 60 },
-  "repricer.other": { enabled: true, dayMinutes: 60, nightMinutes: 120 },
-};
+    // NEW â€” Repricer
+    "repricer.uk": { enabled: true, dayMinutes: 15, nightMinutes: 60 },
+    "repricer.other": { enabled: true, dayMinutes: 60, nightMinutes: 120 },
+  };
 }
 
 function ruleMinutes(rule: CadenceRule, isDay: boolean): number {
@@ -289,7 +258,7 @@ const midsToRun = onlyMid ? uniqNonEmpty([onlyMid]) : allMids;
 if (!out.ok) {
   ran.push(verbose ? { step: stepKey, mid, ok: false, out } : { step: stepKey, mid, ok: false });
   errors.push({ step: stepKey, mid, status: out.status, error: out?.json?.error ?? `HTTP ${out.status}` });
-  return; // don’t explode the whole tick
+  return; // donÃ¢â‚¬â„¢t explode the whole tick
 }
 
 ran.push(verbose ? { step: stepKey, mid, ok: true, out } : { step: stepKey, mid, ok: true });
@@ -310,7 +279,6 @@ await stampLastRun("global", settings, key);
     }
 
     for (const mid of midsToRun) {
-      const invAge = await getInvAgeMinutes(mid);
 
       if (!onlyRepricer && !onlySales) {
   const invAge = await getInvAgeMinutes(mid);
@@ -372,3 +340,4 @@ if (!onlyRepricer && !onlyInventory) {
     return NextResponse.json({ ok: false, error: String(e?.message ?? e) }, { status: 500 });
   }
 }
+

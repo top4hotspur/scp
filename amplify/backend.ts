@@ -4,6 +4,7 @@ import { defineBackend } from "@aws-amplify/backend";
 import { data } from "./data/resource";
 import { schedulerTick } from "./functions/schedulerTick/resource";
 import { newLinesScan } from "./functions/new-lines-scan/resource";
+import { auth } from "./auth/resource";
 
 import { Stack } from "aws-cdk-lib";
 import { RestApi, LambdaIntegration, Cors } from "aws-cdk-lib/aws-apigateway";
@@ -15,6 +16,7 @@ import { Function as CdkFunction } from "aws-cdk-lib/aws-lambda";
 import outputs from "../amplify_outputs.json";
 
 const backend = defineBackend({
+  auth,
   data,
   schedulerTick,
   newLinesScan,

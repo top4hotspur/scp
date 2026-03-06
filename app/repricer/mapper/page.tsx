@@ -1,4 +1,4 @@
-//app/repricer/mapper/page.tsx
+﻿//app/repricer/mapper/page.tsx
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
@@ -20,7 +20,7 @@ type Assignment = {
   // Strategy link
   strategyId: string;
 
-  // Optional per-scope overrides (profit etc) – leave null to inherit from strategy
+  // Optional per-scope overrides (profit etc) Ã¢â‚¬â€œ leave null to inherit from strategy
   overrideMinProfitGbp?: number | null;
   overrideMaxPriceGbp?: number | null;
 
@@ -154,7 +154,7 @@ function PgCascade({
         </select>
         {deepest === 1 ? (
           <button type="button" onClick={() => clearFrom(1)} className="text-white/50 hover:text-white text-sm">
-            ×
+            Ãƒâ€”
           </button>
         ) : null}
       </div>
@@ -176,7 +176,7 @@ function PgCascade({
           </select>
           {deepest === 2 ? (
             <button type="button" onClick={() => clearFrom(2)} className="text-white/50 hover:text-white text-sm">
-              ×
+              Ãƒâ€”
             </button>
           ) : null}
         </div>
@@ -199,7 +199,7 @@ function PgCascade({
           </select>
           {deepest === 3 ? (
             <button type="button" onClick={() => clearFrom(3)} className="text-white/50 hover:text-white text-sm">
-              ×
+              Ãƒâ€”
             </button>
           ) : null}
         </div>
@@ -222,7 +222,7 @@ function PgCascade({
           </select>
           {deepest === 4 ? (
             <button type="button" onClick={() => clearFrom(4)} className="text-white/50 hover:text-white text-sm">
-              ×
+              Ãƒâ€”
             </button>
           ) : null}
         </div>
@@ -245,7 +245,7 @@ function PgCascade({
           </select>
           {deepest === 5 ? (
             <button type="button" onClick={() => clearFrom(5)} className="text-white/50 hover:text-white text-sm">
-              ×
+              Ãƒâ€”
             </button>
           ) : null}
         </div>
@@ -321,10 +321,10 @@ setLookups({
     (async () => {
   try {
     // If you already have this endpoint, use it.
-    // Otherwise we’ll add it (I can give you that file next).
+    // Otherwise weÃ¢â‚¬â„¢ll add it (I can give you that file next).
     const s = await apiGet<any>("/api/settings/app");
 
-    // Try a few likely key names (so this doesn’t redline if naming differs)
+    // Try a few likely key names (so this doesnÃ¢â‚¬â„¢t redline if naming differs)
     const ukMin =
       s?.settings?.repricerUkCadenceMinutes ??
       s?.repricerUkCadenceMinutes ??
@@ -369,17 +369,17 @@ setLookups({
 
     const ukPart =
       ukMin != null
-        ? `UK: every ${ukMin}m` + (ukStart != null && ukEnd != null ? ` (${ukStart}:00–${ukEnd}:00)` : "")
+        ? `UK: every ${ukMin}m` + (ukStart != null && ukEnd != null ? ` (${ukStart}:00Ã¢â‚¬â€œ${ukEnd}:00)` : "")
         : "UK: cadence not set";
 
     const euPart =
       euMin != null
-        ? `EU: every ${euMin}m` + (euStart != null && euEnd != null ? ` (${euStart}:00–${euEnd}:00)` : "")
+        ? `EU: every ${euMin}m` + (euStart != null && euEnd != null ? ` (${euStart}:00Ã¢â‚¬â€œ${euEnd}:00)` : "")
         : "EU: cadence not set";
 
-    setCadenceText(`${ukPart} • ${euPart}`);
+    setCadenceText(`${ukPart} Ã¢â‚¬Â¢ ${euPart}`);
   } catch {
-    // Don’t block the page if settings read fails
+    // DonÃ¢â‚¬â„¢t block the page if settings read fails
     setCadenceText("");
   }
 })();
@@ -475,9 +475,9 @@ setLookups({
     <div className="space-y-4">
       <div className="flex items-start justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-semibold">Repricer • Strategy Mapper</h1>
+          <h1 className="text-2xl font-semibold">Repricer Ã¢â‚¬Â¢ Strategy Mapper</h1>
           <p className="text-white/60">
-            Map a Strategy to SKUs, Suppliers, or Product Groups (1–5). Supports per-market overrides + automation triggers.
+            Map a Strategy to SKUs, Suppliers, or Product Groups (1Ã¢â‚¬â€œ5). Supports per-market overrides + automation triggers.
           </p>
           {cadenceText ? (
   <div className="mt-2 inline-flex rounded-xl border border-white/10 bg-black/20 px-3 py-1 text-xs text-white/70">
@@ -494,7 +494,7 @@ setLookups({
             disabled={saving || loading}
             className="rounded-xl bg-emerald-500/20 px-3 py-2 text-sm hover:bg-emerald-500/30 disabled:opacity-40"
           >
-            {saving ? "Saving…" : "Save"}
+            {saving ? "SavingÃ¢â‚¬Â¦" : "Save"}
           </button>
         </div>
       </div>
@@ -511,7 +511,7 @@ setLookups({
               value={q}
               onChange={(e) => setQ(e.target.value)}
               className="w-72 rounded-xl border border-white/10 bg-black/20 px-3 py-2 outline-none"
-              placeholder="sku / supplier / pg…"
+              placeholder="sku / supplier / pgÃ¢â‚¬Â¦"
             />
           </label>
 
@@ -712,7 +712,7 @@ setLookups({
                   <td className="px-3 py-2 text-xs text-white/70">
                     <div className="flex flex-col gap-1">
                       <label className="flex items-center gap-2">
-                        <span className="w-28 text-white/50">Min profit £</span>
+                        <span className="w-28 text-white/50">Min profit Ã‚£</span>
                         <input
                           type="number"
                           value={a.overrideMinProfitGbp ?? ""}
@@ -723,7 +723,7 @@ setLookups({
                         />
                       </label>
                       <label className="flex items-center gap-2">
-                        <span className="w-28 text-white/50">Max price £</span>
+                        <span className="w-28 text-white/50">Max price Ã‚£</span>
                         <input
                           type="number"
                           value={a.overrideMaxPriceGbp ?? ""}
@@ -831,7 +831,7 @@ setLookups({
               {!filtered.length && (
                 <tr>
                   <td colSpan={8} className="px-3 py-6 text-center text-white/50">
-                    No mappings. Click “Add mapping”.
+                    No mappings. Click Ã¢â‚¬Å“Add mappingÃ¢â‚¬Â.
                   </td>
                 </tr>
               )}
@@ -840,7 +840,7 @@ setLookups({
         </div>
 
         <div className="px-3 py-2 text-xs text-white/40">
-          Order of application (when the worker arrives): SKU mapping &gt; Supplier &gt; PG5…PG1 (most specific wins), then strategy
+          Order of application (when the worker arrives): SKU mapping &gt; Supplier &gt; PG5Ã¢â‚¬Â¦PG1 (most specific wins), then strategy
           defaults, then assignment overrides.
         </div>
       </div>

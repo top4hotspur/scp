@@ -132,7 +132,7 @@ export async function GET(req: Request) {
             ? Number(x.profitExVat)
             : revenueExVat - costs;
 
-        // For chart we want a “sale price” proxy:
+        // For chart we want a â€œsale priceâ€ proxy:
         // If itemPrice exists, use that; else use revenueExVat.
         const price = Number.isFinite(Number(x.itemPrice)) && x.itemPrice != null ? Number(x.itemPrice) : revenueExVat;
 

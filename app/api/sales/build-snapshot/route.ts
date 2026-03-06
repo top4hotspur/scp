@@ -1,30 +1,9 @@
 // app/api/sales/build-snapshot/route.ts
 import { NextResponse } from "next/server";
-import outputs from "@/amplify_outputs.json";
-
-const DATA_URL = outputs.data.url;
-const DATA_API_KEY = outputs.data.api_key;
-
+import { gql } from "@/lib/appsyncGql";
 type GqlResp<T> = { data?: T; errors?: { message: string }[] };
 
-async function gql<T>(query: string, variables?: Record<string, unknown>): Promise<T> {
-  if (!DATA_URL || !DATA_API_KEY) throw new Error("Missing DATA_URL / DATA_API_KEY");
 
-  const res = await fetch(DATA_URL, {
-    method: "POST",
-    headers: {
-      "content-type": "application/json",
-      "x-api-key": DATA_API_KEY,
-    },
-    body: JSON.stringify({ query, variables }),
-  });
-
-  const json = (await res.json().catch(() => ({}))) as GqlResp<T>;
-  if (!res.ok || json.errors?.length) {
-    throw new Error(json.errors?.map((e) => e.message).join(" | ") || `HTTP ${res.status}`);
-  }
-  return json.data as T;
-}
 
 const LIST_SUPPLIERMAPS = /* GraphQL */ `
   query ListSupplierMaps($limit: Int, $nextToken: String) {
@@ -544,3 +523,4 @@ return {
     return NextResponse.json({ ok: false, error: msg }, { status: 500 });
   }
 }
+

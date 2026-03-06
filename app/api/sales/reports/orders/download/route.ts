@@ -2,31 +2,13 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
 import { NextResponse } from "next/server";
-import outputs from "@/amplify_outputs.json";
+import { gql } from "@/lib/appsyncGql"; 
 import { spapi, downloadAndDecryptReportDocument, parseTsv, decodeReportText } from "@/app/api/sales/reports/_spapi";
 
 export const runtime = "nodejs";
-
-const DATA_URL = outputs.data.url;
-const DATA_API_KEY = outputs.data.api_key;
-
 type GqlResp<T> = { data?: T; errors?: { message: string }[] };
 
-async function gql<T>(query: string, variables?: any): Promise<T> {
-  if (!DATA_URL || !DATA_API_KEY) throw new Error("Missing DATA_URL / DATA_API_KEY");
 
-  const res = await fetch(DATA_URL, {
-    method: "POST",
-    headers: { "content-type": "application/json", "x-api-key": DATA_API_KEY },
-    body: JSON.stringify({ query, variables }),
-  });
-
-  const json = (await res.json().catch(() => ({}))) as GqlResp<T>;
-  if (!res.ok || json.errors?.length) {
-    throw new Error(json.errors?.map((e) => e.message).join(" | ") || `HTTP ${res.status}`);
-  }
-  return json.data as T;
-}
 
 const GET_SETTINGS = /* GraphQL */ `
   query GetAppSettings($id: ID!) {
@@ -378,7 +360,7 @@ export async function POST(req: Request) {
 
 const base = input as Record<string, any>;
 
-// Only send fields that exist in CreateSalesLineInput (prevents “unknown field” errors)
+// Only send fields that exist in CreateSalesLineInput (prevents Ã¢â‚¬Å“unknown fieldÃ¢â‚¬Â errors)
 const pruned: Record<string, any> = {};
 for (const k of Object.keys(base)) {
   if (spec.fieldNames.has(k)) pruned[k] = base[k];
@@ -413,7 +395,7 @@ try {
             continue;
           }
 
-          // Real error — surface it
+          // Real error Ã¢â‚¬â€ surface it
           errorCount++;
           skipped++;
 
@@ -494,3 +476,4 @@ const fromIso = startOfToday.toISOString();
     return NextResponse.json({ ok: false, error: String(e?.message ?? e) }, { status: 500 });
   }
 }
+

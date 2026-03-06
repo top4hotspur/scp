@@ -36,7 +36,7 @@ function cx(...parts: Array<string | false | null | undefined>) {
 
 function fmtMoney(n: any) {
   const v = Number(n);
-  return Number.isFinite(v) ? v.toFixed(2) : "—";
+  return Number.isFinite(v) ? v.toFixed(2) : "â€”";
 }
 
 export default function SettingsUploads() {
@@ -101,7 +101,7 @@ export default function SettingsUploads() {
     setIsUploading(true);
     setUploadResp(null);
     setLog([]);
-    pushLog("Uploading…");
+    pushLog("Uploadingâ€¦");
 
     try {
       const fd = new FormData();
@@ -187,7 +187,7 @@ export default function SettingsUploads() {
             className="px-3 py-2 rounded-xl border border-white/10 bg-white/5 hover:bg-white/10 text-sm"
             disabled={isUploading}
           >
-            Browse…
+            Browseâ€¦
           </button>
 
           <button
@@ -286,7 +286,7 @@ export default function SettingsUploads() {
                       <div className="flex items-center justify-between gap-3 rounded-xl border border-white/10 bg-white/5 px-3 py-2">
                         <div className="truncate">
                           <span className="font-medium">{file.name}</span>
-                          <span className="opacity-70"> · {Math.round(file.size / 1024)} KB</span>
+                          <span className="opacity-70"> Â· {Math.round(file.size / 1024)} KB</span>
                         </div>
                         <button
                           onClick={() => onPickFile(null)}
@@ -398,22 +398,22 @@ export default function SettingsUploads() {
                   <tbody>
                     {items.map((r, idx) => (
                       <tr key={(r.id ?? r.sku ?? "row") + idx} className="border-t border-white/5">
-                        <td className="px-3 py-2 font-medium">{r.sku ?? "—"}</td>
-                        <td className="px-3 py-2">{r.supplierName ?? "—"}</td>
-                        <td className="px-3 py-2">{r.prodGroup1 ?? "—"}</td>
+                        <td className="px-3 py-2 font-medium">{r.sku ?? "â€”"}</td>
+                        <td className="px-3 py-2">{r.supplierName ?? "â€”"}</td>
+                        <td className="px-3 py-2">{r.prodGroup1 ?? "â€”"}</td>
                         <td className="px-3 py-2">{fmtMoney(r.productCost)}</td>
                         <td className="px-3 py-2">{fmtMoney(r.prepCost)}</td>
                         <td className="px-3 py-2">{fmtMoney(r.shippingCost)}</td>
-                        <td className="px-3 py-2">{r.label ?? "—"}</td>
-                        <td className="px-3 py-2">{r.excludeUk ? "Y" : "—"}</td>
-                        <td className="px-3 py-2">{r.excludeEu ? "Y" : "—"}</td>
-                        <td className="px-3 py-2 text-xs opacity-70">{r.updatedAtIso ?? "—"}</td>
+                        <td className="px-3 py-2">{r.label ?? "â€”"}</td>
+                        <td className="px-3 py-2">{r.excludeUk ? "Y" : "â€”"}</td>
+                        <td className="px-3 py-2">{r.excludeEu ? "Y" : "â€”"}</td>
+                        <td className="px-3 py-2 text-xs opacity-70">{r.updatedAtIso ?? "â€”"}</td>
                       </tr>
                     ))}
                     {!items.length && (
                       <tr>
                         <td className="px-3 py-6 opacity-70" colSpan={10}>
-                          {previewLoading ? "Loading…" : "No rows returned."}
+                          {previewLoading ? "Loadingâ€¦" : "No rows returned."}
                         </td>
                       </tr>
                     )}
@@ -423,7 +423,7 @@ export default function SettingsUploads() {
             </div>
 
             <div className="mt-3 text-xs opacity-70">
-              Tip: upload → then switch to Preview to validate inserts quickly without hammering anything.
+              Tip: upload â†’ then switch to Preview to validate inserts quickly without hammering anything.
             </div>
           </div>
         )}

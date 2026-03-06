@@ -1,11 +1,7 @@
 //app/api/sales/report-sync/route.ts
 import { NextResponse } from "next/server";
-import outputs from "@/amplify_outputs.json";
+import { DATA_URL, DATA_API_KEY } from "@/lib/dataEnv";
 import { spapiFetch } from "@/lib/spapi/request";
-
-const DATA_URL = outputs.data.url;
-const DATA_API_KEY = outputs.data.api_key;
-
 type GqlResp<T> = { data?: T; errors?: { message: string }[] };
 
 async function gql<T>(query: string, variables?: Record<string, unknown>): Promise<T> {
@@ -95,7 +91,7 @@ export async function POST(req: Request) {
     const url = String(doc?.url ?? "");
     if (!url) throw new Error("Report document missing url");
 
-    // 4) download (most order reports are plain TSV; if compressionAlgorithm exists, we’ll handle later)
+    // 4) download (most order reports are plain TSV; if compressionAlgorithm exists, weÃ¢â‚¬â„¢ll handle later)
     const raw = await fetch(url, { cache: "no-store" }).then((r) => r.text());
 
     const lines = raw.split(/\r?\n/).filter((l) => l.trim().length);
@@ -104,7 +100,7 @@ export async function POST(req: Request) {
     const header = parseTsvLine(lines[0]).map((h) => h.toLowerCase());
     const idx = (name: string) => header.indexOf(name.toLowerCase());
 
-    // Common columns in this report (varies slightly, we’ll adapt once we see real output)
+    // Common columns in this report (varies slightly, weÃ¢â‚¬â„¢ll adapt once we see real output)
     const iOrder = idx("order-id");
     const iSku = idx("sku");
     const iQty = idx("quantity-purchased");
@@ -153,7 +149,7 @@ export async function POST(req: Request) {
         itemPrice: iItemPrice >= 0 ? numMaybe(String(cols[iItemPrice] ?? "")) : null,
         shippingPrice: iShipPrice >= 0 ? numMaybe(String(cols[iShipPrice] ?? "")) : null,
 
-        // you can add a field later in model for this, or keep a “status” in totalsJson only
+        // you can add a field later in model for this, or keep a Ã¢â‚¬Å“statusÃ¢â‚¬Â in totalsJson only
         // orderStatus: status,
       };
 
@@ -170,3 +166,4 @@ export async function POST(req: Request) {
     return NextResponse.json({ ok: false, error: String(e?.message ?? e) }, { status: 500 });
   }
 }
+

@@ -2,11 +2,7 @@
 import { NextResponse } from "next/server";
 import zlib from "node:zlib";
 import { spapiFetch } from "@/lib/spapi/request";
-import outputs from "@/amplify_outputs.json";
-
-const DATA_URL = outputs.data.url;
-const DATA_API_KEY = outputs.data.api_key;
-
+import { DATA_URL, DATA_API_KEY } from "@/lib/dataEnv";
 type GqlResp<T> = { data?: T; errors?: { message: string }[] };
 
 async function gql<T>(query: string, variables?: any): Promise<T> {
@@ -87,7 +83,7 @@ const UPDATE_SNAPSHOT = /* GraphQL */ `
   }
 `;
 
-// You will add these models in amplify/data/resource.ts in the next step (I’ll give that patch next).
+// You will add these models in amplify/data/resource.ts in the next step (IÃ¢â‚¬â„¢ll give that patch next).
 // For now, createCleanListing / createCleanListingSnapshot will fail until schema is added.
 
 function parseTsv(text: string): { header: string[]; rows: Record<string, string>[] } {
@@ -346,3 +342,4 @@ inactiveReasonCode: norm.code || null,
     return NextResponse.json({ ok: false, error: String(e?.message ?? e) }, { status: 500 });
   }
 }
+

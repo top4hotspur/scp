@@ -1,7 +1,4 @@
-//lib/dataClient.ts
-import { generateClient } from "aws-amplify/data";
-import outputs from "@/amplify_outputs.json";
+import { generateClient } from "aws-amplify/api";
+import type { Schema } from "@/amplify/data/resource";
 
-export const dataClient = generateClient({
-  config: outputs,
-});
+export const dataClient = generateClient<Schema>();

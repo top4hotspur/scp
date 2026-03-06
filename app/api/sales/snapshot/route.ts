@@ -1,10 +1,6 @@
 //app/api/sales/snapshot/route.ts
 import { NextResponse } from "next/server";
-import outputs from "@/amplify_outputs.json";
-
-const DATA_URL = outputs.data.url;
-const DATA_API_KEY = outputs.data.api_key;
-
+import { DATA_URL, DATA_API_KEY } from "@/lib/dataEnv";
 type GqlResp<T> = { data?: T; errors?: { message: string }[] };
 
 async function gql<T>(query: string, variables?: any): Promise<T> {
@@ -83,3 +79,4 @@ function safeJson<T>(s: any, fallback: T): T {
     return fallback;
   }
 }
+

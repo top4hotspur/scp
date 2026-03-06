@@ -1,4 +1,4 @@
-//app/repicer/strategies/page.tsx
+﻿//app/repicer/strategies/page.tsx
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
@@ -55,7 +55,7 @@ export type Strategy = {
   // Sole seller behavior
   whenOnlySeller: OnlySellerMode;
 
-  // Step config (shared by “step up” actions)
+  // Step config (shared by step-up actions)
   stepMode: StepMode;
   stepPctPerDay?: number; // e.g. 1
   stepGbpPerDay?: number; // e.g. 0.05
@@ -102,7 +102,7 @@ function defaultStrategy(): Strategy {
   const now = new Date().toISOString();
   return {
     id: uid("stg"),
-    name: "Default • Match + Guard",
+    name: "Default - Match + Guard",
     isEnabled: true,
 
     priceMatchMode: "MATCH_BUYBOX",
@@ -217,7 +217,7 @@ export default function Page() {
     <div className="space-y-4">
       <div className="flex items-start justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-semibold">Repricer • Strategies</h1>
+          <h1 className="text-2xl font-semibold">Repricer Ã¢â‚¬Â¢ Strategies</h1>
           <p className="text-white/60">
             Define how we price: match (no 1p race), Buy Box handling, only-seller climb, velocity guard + backoff.
           </p>
@@ -249,7 +249,7 @@ export default function Page() {
             disabled={saving || loading}
             className="rounded-xl bg-emerald-500/20 px-3 py-2 text-sm hover:bg-emerald-500/30 disabled:opacity-40"
           >
-            {saving ? "Saving…" : "Save"}
+            {saving ? "SavingÃ¢â‚¬Â¦" : "Save"}
           </button>
         </div>
       </div>
@@ -281,7 +281,7 @@ export default function Page() {
                   </span>
                 </div>
                 <div className="mt-1 text-xs text-white/60">
-                  {s.priceMatchMode.replaceAll("_", " ")} • Own BB: {s.whenOwnBuyBox.replaceAll("_", " ")} • Only seller:{" "}
+                  {s.priceMatchMode.replaceAll("_", " ")} Ã¢â‚¬Â¢ Own BB: {s.whenOwnBuyBox.replaceAll("_", " ")} Ã¢â‚¬Â¢ Only seller:{" "}
                   {s.whenOnlySeller.replaceAll("_", " ")}
                 </div>
               </button>
@@ -340,7 +340,7 @@ export default function Page() {
                     <option value="RAISE_SLOWLY">Raise slowly</option>
                     <option value="RAISE_TO_MAX">Raise to max</option>
                     <option value="STEP_UP_PCT_DAILY">Step up % daily</option>
-                    <option value="STEP_UP_GBP_DAILY">Step up £ daily</option>
+                    <option value="STEP_UP_GBP_DAILY">Step up Ã‚£ daily</option>
                   </select>
                 </label>
 
@@ -355,8 +355,8 @@ export default function Page() {
                     <option value="GO_MAX">Go to max</option>
                     <option value="GO_MIN">Go to min</option>
                     <option value="STEP_UP_PCT_DAILY">Step up % daily</option>
-                    <option value="STEP_UP_GBP_DAILY">Step up £ daily</option>
-                    <option value="STEP_UP_MAX_OF_BOTH">Step up (max of £/% daily)</option>
+                    <option value="STEP_UP_GBP_DAILY">Step up Ã‚£ daily</option>
+                    <option value="STEP_UP_MAX_OF_BOTH">Step up (max of Ã‚£/% daily)</option>
                   </select>
                 </label>
               </div>
@@ -365,7 +365,7 @@ export default function Page() {
                 <div className="mb-2 text-sm font-medium">Floors / Ceilings</div>
                 <div className="grid gap-3 md:grid-cols-3">
                   <label className="space-y-1">
-                    <div className="text-xs text-white/60">Min profit (£)</div>
+                    <div className="text-xs text-white/60">Min profit (Ã‚£)</div>
                     <input
                       type="number"
                       value={selected.minProfitGbp ?? ""}
@@ -393,7 +393,7 @@ export default function Page() {
                   </label>
 
                   <label className="space-y-1">
-                    <div className="text-xs text-white/60">Max profit (£)</div>
+                    <div className="text-xs text-white/60">Max profit (Ã‚£)</div>
                     <input
                       type="number"
                       value={selected.maxProfitGbp ?? ""}
@@ -433,8 +433,8 @@ export default function Page() {
                       className="w-full rounded-xl border border-white/10 bg-black/20 px-3 py-2 outline-none"
                     >
                       <option value="PCT">Percent</option>
-                      <option value="FIXED">Fixed £</option>
-                      <option value="MAX_OF_BOTH">Max(£,%)</option>
+                      <option value="FIXED">Fixed Ã‚£</option>
+                      <option value="MAX_OF_BOTH">Max(Ã‚£,%)</option>
                     </select>
                   </label>
                   <label className="space-y-1">
@@ -447,7 +447,7 @@ export default function Page() {
                     />
                   </label>
                   <label className="space-y-1">
-                    <div className="text-xs text-white/60">Step £ / day</div>
+                    <div className="text-xs text-white/60">Step Ã‚£ / day</div>
                     <input
                       type="number"
                       value={selected.stepGbpPerDay ?? ""}
@@ -456,7 +456,7 @@ export default function Page() {
                     />
                   </label>
                   <label className="space-y-1">
-                    <div className="text-xs text-white/60">Hard max price (£)</div>
+                    <div className="text-xs text-white/60">Hard max price (Ã‚£)</div>
                     <input
                       type="number"
                       value={selected.maxPriceGbp ?? ""}
@@ -468,7 +468,7 @@ export default function Page() {
               </div>
 
               <div className="rounded-2xl border border-white/10 bg-black/10 p-3">
-                <div className="mb-2 text-sm font-medium">Velocity guard (the “clever” bit)</div>
+                <div className="mb-2 text-sm font-medium">Velocity guard (the Ã¢â‚¬Å“cleverÃ¢â‚¬Â bit)</div>
                 <div className="grid gap-3 md:grid-cols-3">
                   <label className="flex items-end gap-2">
                     <input

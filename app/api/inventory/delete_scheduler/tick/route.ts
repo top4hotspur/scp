@@ -1,5 +1,6 @@
 //app/api/inventory/scheduler/tick/route.ts
 import { NextResponse } from "next/server";
+import { DATA_URL, DATA_API_KEY } from "@/lib/dataEnv";
 
 
 
@@ -87,15 +88,11 @@ const euAnchorMid = euAnchorMidForScan;
 
     try {
       // minimal read from Data API via existing heartbeat record
-      // We read via /api/viewer/heartbeat?read=1 if you have it — but you currently only have heartbeat.
+      // We read via /api/viewer/heartbeat?read=1 if you have it Ã¢â‚¬â€ but you currently only have heartbeat.
       // So we use a cheap heuristic: if active-only, require lastSeen within 20 minutes by reading the ViewerSession table directly.
       // We'll do it via GraphQL using the same Data API key pattern already used elsewhere.
 
-      const outputs = await import("@/amplify_outputs.json").then((m) => (m as any).default ?? m);
-      const DATA_URL = outputs.data.url;
-      const DATA_API_KEY = outputs.data.api_key;
-
-      const gql = async (query: string, variables?: any) => {
+const gql = async (query: string, variables?: any) => {
         const r = await fetch(DATA_URL, {
           method: "POST",
           headers: { "content-type": "application/json", "x-api-key": DATA_API_KEY },
@@ -165,7 +162,7 @@ if (minutesSince(lastMap[kScan]) >= scanCad) due.push(kScan);
     }
 
     // 4) Trigger work
-    // For now: build snapshots (cheap) — later we replace these calls with /api/inventory/ingest?mid=...
+    // For now: build snapshots (cheap) Ã¢â‚¬â€ later we replace these calls with /api/inventory/ingest?mid=...
     const ran: any[] = [];
     const errors: any[] = [];
 
@@ -282,3 +279,4 @@ if (due.includes(kScan)) {
     return NextResponse.json({ ok: false, error: String(e?.message ?? e) }, { status: 500 });
   }
 }
+

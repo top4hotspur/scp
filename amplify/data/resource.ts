@@ -1,5 +1,5 @@
 //amplify/data/resource.ts
-import { a, defineData } from "@aws-amplify/backend";
+import { a, defineData, type ClientSchema } from "@aws-amplify/backend";
 
 const schema = a.schema({
  // ---------------------------------------------------------------------------
@@ -23,7 +23,7 @@ InventorySnapshot: a
     inboundUnits: a.integer(),
     reservedUnits: a.integer(),
 
-    // Optional: store “top lists” as JSON for instant tables (no extra queries)
+    // Optional: store â€œtop listsâ€ as JSON for instant tables (no extra queries)
     // Keep this small. (Later we can move big lists to S3 and reference a key.)
     topLowStockJson: a.string(),           // JSON array of rows (<= ~100 rows)
     })
@@ -162,7 +162,7 @@ reportBackfillDays: a.integer(),
     .authorization((allow) => [allow.publicApiKey()]),
 
   // ---------------------------------------------------------------------------
-  // Orders → Purchase Orders (Draft-first)
+  // Orders â†’ Purchase Orders (Draft-first)
   // ---------------------------------------------------------------------------
   PurchaseOrder: a
     .model({
@@ -234,8 +234,14 @@ reportBackfillDays: a.integer(),
     excludeEu: a.boolean(),
 
     updatedAtIso: a.string().required(),
-  })
-  .authorization((allow) => [allow.publicApiKey()]),
+    })
+  .authorization((allow) => [
+  // Allow server routes (DATA_API_KEY) to read/list SupplierMap
+  allow.publicApiKey().to(["read"]),
+
+  // (Optional but recommended) allow signed-in admin use later
+  // allow.authenticated().to(["read", "create", "update", "delete"]),
+]),
 
   // ---------------------------------------------------------------------------
 // Clean Listing Health (All Listings report ingest)
@@ -346,7 +352,10 @@ SalesLine: a
     orderStatus: a.string(),
     isCanceled: a.boolean(),
   })
-  .authorization((allow) => [allow.publicApiKey()])
+    .authorization((allow) => [
+    // Server routes using DATA_API_KEY need at least READ access
+    allow.publicApiKey().to(["read"]),
+  ])
   .identifier(["marketplaceId", "orderId", "lineId"])
   .secondaryIndexes((idx) => [
     idx("marketplaceId").sortKeys(["shippedAtIso"]).name("byMarketplaceShippedAt"),
@@ -481,7 +490,7 @@ SalesLine: a
       asin: a.string(),
       currency: a.string(),
 
-      // “Truth” signals
+      // â€œTruthâ€ signals
       ownPrice: a.float(),
       buyBoxPrice: a.float(),
       isOnlySeller: a.boolean(),
@@ -522,7 +531,7 @@ SalesLine: a
       vatRegisteredJson: a.string(),            // JSON map marketplaceId -> boolean
       vatRateJson: a.string(),                  // JSON map marketplaceId -> number (e.g. 0.20)
 
-      // FX preferences for “Combined”
+      // FX preferences for â€œCombinedâ€
       fxBaseCurrency: a.string(),               // "GBP"
       fxSource: a.string(),                     // "HMRC_MONTHLY" | "ECB_DAILY"
     })
@@ -575,3 +584,4 @@ export const data = defineData({
     },
   },
 });
+export type Schema = ClientSchema<typeof schema>;

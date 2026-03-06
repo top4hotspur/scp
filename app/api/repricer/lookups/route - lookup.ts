@@ -124,7 +124,7 @@ export async function GET() {
         if (!nextToken) break;
       }
     } catch {
-      // swallow – mapper still works, just without dropdown lookups
+      // swallow â€“ mapper still works, just without dropdown lookups
     }
 
     return NextResponse.json({

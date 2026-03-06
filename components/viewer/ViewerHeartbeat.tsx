@@ -22,7 +22,7 @@ export function ViewerHeartbeat() {
           }),
         });
       } catch {
-        // ignore – we don't want UI spam
+        // ignore â€“ we don't want UI spam
       }
     }
 

@@ -1,4 +1,4 @@
-// app/api/repricer/run/route.ts
+﻿// app/api/repricer/run/route.ts
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
 import { NextResponse } from "next/server";
@@ -6,9 +6,8 @@ import outputs from "@/amplify_outputs.json";
 
 export const runtime = "nodejs";
 
-const DATA_URL = (outputs as any)?.data?.url ?? process.env.DATA_URL;
-const DATA_API_KEY = (outputs as any)?.data?.api_key ?? process.env.DATA_API_KEY;
-
+const DATA_URL = (outputs as any)?.data?.url;
+const DATA_API_KEY = (outputs as any)?.data?.api_key;
 type GqlResp<T> = { data?: T; errors?: { message: string }[] };
 
 async function gql<T>(query: string, variables?: any): Promise<T> {
@@ -109,11 +108,14 @@ async function postJsonBody(url: string, body: any) {
 const GET_SETTINGS = /* GraphQL */ `
   query GetAppSettings($id: ID!) {
     getAppSettings(id: $id) {
-      id
-      repricerStrategiesJson
-      repricerAssignmentsJson
-      updatedAtIso
-    }
+  id
+  repricerStrategiesJson
+  repricerAssignmentsJson
+  updatedAtIso
+
+  lastRunByKeyJson
+  inventoryLastRunByKeyJson
+}
   }
 `;
 
@@ -181,6 +183,42 @@ const GET_STATE = /* GraphQL */ `
     }
   }
 `;
+
+const UPDATE_SETTINGS = /* GraphQL */ `
+  mutation UpdateAppSettings($input: UpdateAppSettingsInput!) {
+    updateAppSettings(input: $input) { id lastRunByKeyJson inventoryLastRunByKeyJson }
+  }
+`;
+
+function safeJsonObj(s: any): Record<string, string> {
+  try {
+    const v = typeof s === "string" ? JSON.parse(s) : s;
+    return (v && typeof v === "object") ? v : {};
+  } catch {
+    return {};
+  }
+}
+
+async function stampRunKey(settingsObj: any, key: string) {
+  const iso = new Date().toISOString();
+  const input: any = { id: "global" };
+
+  // Prefer lastRunByKeyJson if it exists in schema
+  if (typeof settingsObj?.lastRunByKeyJson !== "undefined") {
+    const cur = safeJsonObj(settingsObj.lastRunByKeyJson);
+    input.lastRunByKeyJson = JSON.stringify({ ...cur, [key]: iso });
+  }
+
+  // Fall back to inventoryLastRunByKeyJson if thatâ€™s what exists
+  if (typeof settingsObj?.inventoryLastRunByKeyJson !== "undefined") {
+    const cur = safeJsonObj(settingsObj.inventoryLastRunByKeyJson);
+    input.inventoryLastRunByKeyJson = JSON.stringify({ ...cur, [key]: iso });
+  }
+
+  if (Object.keys(input).length === 1) return;
+
+  try { await gql(UPDATE_SETTINGS, { input }); } catch { /* ignore */ }
+}
 
 type Strategy = any;    // stored JSON
 type Assignment = any;  // stored JSON
@@ -296,7 +334,7 @@ function velGuardTrips(strategy: Strategy, baseline: number | null, last2d: numb
   if (!g?.enabled) return false;
   if (baseline == null || last2d == null) return false;
 
-// Don’t guard-trip on tiny baselines (noise)
+// Donâ€™t guard-trip on tiny baselines (noise)
 if (baseline < 0.05) return false;
 
 // Require a minimum absolute 2-day velocity to evaluate (avoid "0 trips everything")
@@ -309,6 +347,7 @@ return last2d < baseline * minPct;
 export async function POST(req: Request) {
   try {
     const baseUrl = baseUrlFromReq(req);
+    
     if (!baseUrl) return NextResponse.json({ ok: false, error: "Missing host headers" }, { status: 500 });
 
     const { searchParams } = new URL(req.url);
@@ -466,12 +505,12 @@ if (ownPrice == null) {
   // when ownPrice exists, your existing logic will overwrite reason
 }
 
-      // If we have enough truth to act, run the “clever” logic
+      // If we have enough truth to act, run the â€œcleverâ€ logic
       if (strategy && ownPrice != null) {
         const onlySellerMode = String(strategy?.whenOnlySeller ?? "HOLD");
         const ownBbMode = String(strategy?.whenOwnBuyBox ?? "HOLD");
 
-        // Velocity guard triggers BACKOFF when we’re in climb mode and sales drop
+        // Velocity guard triggers BACKOFF when weâ€™re in climb mode and sales drop
         const guardTrips = velGuardTrips(strategy, baseline, v2);
 
         if (guardTrips) {
@@ -644,7 +683,7 @@ const stateInput: any = {
 
       out.push({ sku, action, reason, ownPrice, buyBoxPrice, proposedPrice, patched, submissionId, patchError });
     }
-
+await stampRunKey(settings, `REPRICER:${mid}`);
     return NextResponse.json({
       ok: true,
       mid,
@@ -654,9 +693,10 @@ const stateInput: any = {
       decisions: out,
       note: dryRun
   ? "DRYRUN=1 (no patch)."
-  : "LIVE (DRYRUN=0) — PATCH enabled for MATCH_BUYBOX and BACKOFF only.",
+  : "LIVE (DRYRUN=0) â€” PATCH enabled for MATCH_BUYBOX and BACKOFF only.",
     });
   } catch (e: any) {
     return NextResponse.json({ ok: false, error: String(e?.message ?? e) }, { status: 500 });
   }
 }
+

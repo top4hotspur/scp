@@ -29,7 +29,7 @@ function cx(...parts: Array<string | false | null | undefined>) {
 }
 
 function fmtIso(iso?: string) {
-  if (!iso) return "—";
+  if (!iso) return "â€”";
   const d = new Date(iso);
   if (isNaN(d.getTime())) return iso;
 
@@ -65,7 +65,7 @@ function sellerCentralDomainForMarketplace(mid: string): string {
 function sellerCentralInventoryLink(mid: string, sku: string, bucket: string): string {
   const domain = sellerCentralDomainForMarketplace(mid);
 
-  // Map our bucket to SellerCentral’s status param (best-effort).
+  // Map our bucket to SellerCentralâ€™s status param (best-effort).
   const statusMap: Record<string, string> = {
     "Detail Page Removed": "detail_page_removed",
     "Search suppressed": "search_suppressed",
@@ -210,8 +210,8 @@ export default function Page() {
   }, [loadAll]);
 
   const headerSub = useMemo(() => {
-    if (!snap) return "Listing Health (snapshot-first). Uses Amazon Reports → stored rows → snapshot + drilldown.";
-    return `Snapshot · ${marketplaceName(mid)} · ${fmtIso(snap.createdAtIso)} · total ${snap.total ?? 0}`;
+    if (!snap) return "Listing Health (snapshot-first). Uses Amazon Reports â†’ stored rows â†’ snapshot + drilldown.";
+    return `Snapshot Â· ${marketplaceName(mid)} Â· ${fmtIso(snap.createdAtIso)} Â· total ${snap.total ?? 0}`;
   }, [snap]);
 
   const statusOptions = useMemo(() => {
@@ -249,6 +249,14 @@ export default function Page() {
   a.click();
   a.remove();
   URL.revokeObjectURL(url);
+}
+
+function csvEscape(value: unknown) {
+  const s = String(value ?? "");
+  if (s.includes('"') || s.includes(",") || s.includes("\n") || s.includes("\r")) {
+    return `"${s.replace(/"/g, '""')}"`;
+  }
+  return s;
 }
 
 function buildBulkDeleteCsv(skus: string[]) {
@@ -296,14 +304,14 @@ const downloadBulkDeletePopulated = useCallback(() => {
       {/* Header */}
       <div className="flex items-start justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-semibold">MI • Clean</h1>
+          <h1 className="text-2xl font-semibold">MI â€¢ Clean</h1>
           <p className="text-white/60">{headerSub}</p>
           {!!Object.keys(counts ?? {}).length && (
   <p className="text-white/60 text-sm">
     {Object.entries(counts)
       .sort((a, b) => (b[1] ?? 0) - (a[1] ?? 0))
       .map(([k, v]) => `${k}: ${v ?? 0}`)
-      .join(" · ")}
+      .join(" Â· ")}
   </p>
 )}
         </div>
@@ -422,7 +430,7 @@ const downloadBulkDeletePopulated = useCallback(() => {
               {!Object.keys(counts ?? {}).length && (
                 <tr>
                   <td className="px-3 py-6 opacity-70" colSpan={2}>
-                    {loading ? "Loading…" : "No bucket counts yet. Run All Listings ingest."}
+                    {loading ? "Loadingâ€¦" : "No bucket counts yet. Run All Listings ingest."}
                   </td>
                 </tr>
               )}
@@ -434,7 +442,7 @@ const downloadBulkDeletePopulated = useCallback(() => {
       {/* Drilldown table */}
       <div className="rounded-2xl border border-white/10 overflow-hidden">
         <div className="px-3 py-2 border-b border-white/10 text-xs opacity-80">
-          Drilldown · {status ? status : "All"} · {rows.length}
+          Drilldown Â· {status ? status : "All"} Â· {rows.length}
         </div>
 
         <div className="overflow-auto">
@@ -474,7 +482,7 @@ const downloadBulkDeletePopulated = useCallback(() => {
               {!rows.length && (
                 <tr>
                   <td className="px-3 py-6 opacity-70" colSpan={5}>
-                    {loading ? "Loading…" : "No rows for this filter."}
+                    {loading ? "Loadingâ€¦" : "No rows for this filter."}
                   </td>
                 </tr>
               )}

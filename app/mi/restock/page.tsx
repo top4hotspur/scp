@@ -27,7 +27,7 @@ type RestockRow = {
   sku: string;
   shortTitle?: string | null;
 
-  // these may be “suggested” numbers from restock table
+  // these may be â€œsuggestedâ€ numbers from restock table
   available: number;
   inbound: number;
 
@@ -36,7 +36,7 @@ type RestockRow = {
   daysToOrder: number | null;
 
   unitCost: number;
-  soldUnits: number; // <-- we’ll display this as “Sales”
+  soldUnits: number; // <-- weâ€™ll display this as Sales
   dailyVel: number;
 };
 
@@ -211,7 +211,7 @@ async function loadDraftLines(params: { mid: string; supplier: string }) {
   }
 
     function sortIcon(key: SortKey) {
-    if (!sort || sort.key !== key) return <ChevronUp className="h-4 w-4 opacity-20 rotate-180" />; // faint “inactive”
+    if (!sort || sort.key !== key) return <ChevronUp className="h-4 w-4 opacity-20 rotate-180" />; // faint â€œinactiveâ€
     return sort.dir === "desc" ? (
       <ChevronDown className="h-4 w-4 opacity-90" />
     ) : (
@@ -481,10 +481,10 @@ case "daysToOrder": {
       {/* Header */}
       <div className="flex items-start justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-semibold">MI • Restock</h1>
+          <h1 className="text-2xl font-semibold">MI â€¢ Restock</h1>
           <p className="text-white/60">Snapshot-first + supplier-driven restock planning (no SP-API calls from UI).</p>
           <p className="text-xs text-white/60 mt-1">
-            Snapshot: {snap?.status ?? "—"} · {fmtIso(snap?.createdAtIso)}
+            Snapshot: {snap?.status ?? "â€”"} Â· {fmtIso(snap?.createdAtIso)}
           </p>
         </div>
 
@@ -575,7 +575,7 @@ case "daysToOrder": {
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             <Metric label="Order Units" value={orderSummary.orderUnits} />
             <Metric label="Order Value" value={fmtMoney(orderSummary.orderValue)} />
-            <Metric label="Order Profit" value={orderSummary.orderProfit == null ? "—" : fmtMoney(orderSummary.orderProfit)} />
+            <Metric label="Order Profit" value={orderSummary.orderProfit == null ? "â€”" : fmtMoney(orderSummary.orderProfit)} />
             <Metric label="Lines" value={orderSummary.lines} />
           </div>
         </div>
@@ -629,15 +629,15 @@ case "daysToOrder": {
           return (
             <tr key={k} className="border-t border-white/5">
               <td className="px-3 py-2 font-medium whitespace-nowrap">{r.sku}</td>
-              <td className="px-3 py-2">{r.shortTitle ?? "—"}</td>
+              <td className="px-3 py-2">{r.shortTitle ?? "â€”"}</td>
 
               <td className="px-3 py-2 text-right">{fmtInt(avail)}</td>
               <td className="px-3 py-2 text-right">{fmtInt(inbound)}</td>
               <td className="px-3 py-2 text-right">{fmtInt(sales)}</td>
 
               <td className="px-3 py-2 text-right">{fmtInt(r.projectedBalance)}</td>
-              <td className="px-3 py-2 text-right">{r.daysOfCover == null ? "—" : fmtInt(r.daysOfCover)}</td>
-              <td className="px-3 py-2 text-right">{r.daysToOrder == null ? "—" : fmtInt(r.daysToOrder)}</td>
+              <td className="px-3 py-2 text-right">{r.daysOfCover == null ? "â€”" : fmtInt(r.daysOfCover)}</td>
+              <td className="px-3 py-2 text-right">{r.daysToOrder == null ? "â€”" : fmtInt(r.daysToOrder)}</td>
 
               <td className="px-3 py-2 text-right">
                 <input
@@ -700,7 +700,7 @@ case "daysToOrder": {
 
     await upsertDraftLine({ mid, supplier: s, sku, qty: n });
   } catch (err) {
-    // revert to “not added” if anything fails
+    // revert to â€œnot addedâ€ if anything fails
     setAddedQtyByKey((p) => {
       const next = { ...p };
       delete next[k];
@@ -728,7 +728,7 @@ case "daysToOrder": {
         {!rows.length && (
           <tr>
             <td colSpan={10} className="px-3 py-6 text-white/60">
-              {tableLoading ? "Loading…" : "No rows yet. Choose a supplier."}
+              {tableLoading ? "Loadingâ€¦" : "No rows yet. Choose a supplier."}
             </td>
           </tr>
         )}
@@ -738,7 +738,7 @@ case "daysToOrder": {
 </div>
 
         <div className="text-xs text-white/60">
-          Next: wire +/– to create/update/remove lines in <span className="text-white/80">Orders → Management</span>{" "}
+          Next: wire +/â€“ to create/update/remove lines in <span className="text-white/80">Orders â†’ Management</span>{" "}
           (draft orders per supplier + marketplace).
         </div>
 

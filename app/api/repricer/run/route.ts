@@ -2,27 +2,8 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
 import { NextResponse } from "next/server";
-import outputs from "@/amplify_outputs.json";
-
+import { gql } from "@/lib/appsyncGql";
 export const runtime = "nodejs";
-
-const DATA_URL = (outputs as any)?.data?.url ?? process.env.DATA_URL;
-const DATA_API_KEY = (outputs as any)?.data?.api_key ?? process.env.DATA_API_KEY;
-
-type GqlResp<T> = { data?: T; errors?: { message: string }[] };
-
-async function gql<T>(query: string, variables?: any): Promise<T> {
-  if (!DATA_URL || !DATA_API_KEY) throw new Error("Missing DATA_URL / DATA_API_KEY");
-  const res = await fetch(DATA_URL, {
-    method: "POST",
-    headers: { "content-type": "application/json", "x-api-key": DATA_API_KEY },
-    body: JSON.stringify({ query, variables }),
-    cache: "no-store",
-  });
-  const json = (await res.json().catch(() => ({}))) as GqlResp<T>;
-  if (!res.ok || json.errors?.length) throw new Error(json.errors?.map((e) => e.message).join(" | ") || `HTTP ${res.status}`);
-  return json.data as T;
-}
 
 function safeJson<T>(s: any, fallback: T): T {
   try {
@@ -33,6 +14,13 @@ function safeJson<T>(s: any, fallback: T): T {
   }
 }
 
+async function gqlStep<T = any>(label: string, query: string, variables?: any): Promise<T> {
+  try {
+    return (await gql(query, variables)) as any;
+  } catch (e: any) {
+    throw new Error(`[REPRICER:${label}] ${String(e?.message ?? e)}`);
+  }
+}
 
 function minutesAgo(iso: string | null | undefined): number | null {
   if (!iso) return null;
@@ -114,7 +102,6 @@ const GET_SETTINGS = /* GraphQL */ `
   repricerAssignmentsJson
   updatedAtIso
 
-  lastRunByKeyJson
   inventoryLastRunByKeyJson
 }
   }
@@ -187,7 +174,7 @@ const GET_STATE = /* GraphQL */ `
 
 const UPDATE_SETTINGS = /* GraphQL */ `
   mutation UpdateAppSettings($input: UpdateAppSettingsInput!) {
-    updateAppSettings(input: $input) { id lastRunByKeyJson inventoryLastRunByKeyJson }
+    updateAppSettings(input: $input) { id inventoryLastRunByKeyJson }
   }
 `;
 
@@ -204,13 +191,7 @@ async function stampRunKey(settingsObj: any, key: string) {
   const iso = new Date().toISOString();
   const input: any = { id: "global" };
 
-  // Prefer lastRunByKeyJson if it exists in schema
-  if (typeof settingsObj?.lastRunByKeyJson !== "undefined") {
-    const cur = safeJsonObj(settingsObj.lastRunByKeyJson);
-    input.lastRunByKeyJson = JSON.stringify({ ...cur, [key]: iso });
-  }
-
-  // Fall back to inventoryLastRunByKeyJson if that’s what exists
+  // Fall back to inventoryLastRunByKeyJson if thatÃ¢â‚¬â„¢s what exists
   if (typeof settingsObj?.inventoryLastRunByKeyJson !== "undefined") {
     const cur = safeJsonObj(settingsObj.inventoryLastRunByKeyJson);
     input.inventoryLastRunByKeyJson = JSON.stringify({ ...cur, [key]: iso });
@@ -218,7 +199,7 @@ async function stampRunKey(settingsObj: any, key: string) {
 
   if (Object.keys(input).length === 1) return;
 
-  try { await gql(UPDATE_SETTINGS, { input }); } catch { /* ignore */ }
+  try { await gqlStep("STAMP_RUNKEY", UPDATE_SETTINGS, { input }); } catch { /* ignore */ }
 }
 
 type Strategy = any;    // stored JSON
@@ -248,18 +229,21 @@ function nowIso() {
   return new Date().toISOString();
 }
 
-async function getState(mid: string, sku: string): Promise<{ dayKey?: string | null; changesToday?: number | null; cooldownUntilIso?: string | null } | null> {
+async function getState(
+  mid: string,
+  sku: string
+): Promise<{ dayKey?: string | null; changesToday?: number | null; cooldownUntilIso?: string | null } | null> {
   try {
-    const d: any = await gql(GET_STATE, { marketplaceId: mid, sku });
+    const d: any = await gqlStep("GET_STATE", GET_STATE, { marketplaceId: mid, sku });
     return d?.getPricePilotState ?? null;
   } catch {
-    return null;
+    return null; // treat as missing state if unauthorized / absent
   }
 }
 
 async function getOfferTruth(mid: string, sku: string): Promise<PriceTruth | null> {
   try {
-    const d: any = await gql(GET_OFFERTRUTH, { marketplaceId: mid, sku });
+    const d: any = await gqlStep("GET_OFFERTRUTH", GET_OFFERTRUTH, { marketplaceId: mid, sku });
     const t = d?.getOfferTruth ?? null;
     if (!t) return null;
 
@@ -335,13 +319,21 @@ function velGuardTrips(strategy: Strategy, baseline: number | null, last2d: numb
   if (!g?.enabled) return false;
   if (baseline == null || last2d == null) return false;
 
-// Don’t guard-trip on tiny baselines (noise)
-if (baseline < 0.05) return false;
+  // Don't guard-trip on tiny baselines (noise)
+  if (baseline < 0.05) return false;
 
-// Require a minimum absolute 2-day velocity to evaluate (avoid "0 trips everything")
-if (last2d < 0.01) return true; // optional: if you want "hard stop" on zero sales
-const minPct = Number(g?.minPctOfBaseline ?? 0.6);
-return last2d < baseline * minPct;
+  // NEW: if baseline is low, do NOT hard-stop just because last2d is ~0.
+  // baseline < 0.2/day ~= < 6 sales/month
+  if (baseline < 0.2) {
+    const minPctLow = Number(g?.minPctOfBaselineLow ?? g?.minPctOfBaseline ?? 0.6);
+    return last2d < baseline * minPctLow;
+  }
+
+  // For meaningful baseline: optional hard stop on ~0 sales over 2 days
+  if (last2d < 0.01) return true;
+
+  const minPct = Number(g?.minPctOfBaseline ?? 0.6);
+  return last2d < baseline * minPct;
 }
 
 // NOTE: This engine is DRYRUN by default until Listings truth + PATCH is wired.
@@ -355,6 +347,7 @@ export async function POST(req: Request) {
     const mid = String(searchParams.get("mid") ?? "").trim();
     const limit = Math.max(1, Math.min(200, Number(searchParams.get("limit") ?? 50)));
     const dryRun = String(searchParams.get("dryRun") ?? "1").trim() !== "0";
+    const force = String(searchParams.get("force") ?? "0").trim() === "1";    
 
     if (!mid) return NextResponse.json({ ok: false, error: "Missing mid" }, { status: 400 });
 
@@ -362,7 +355,7 @@ export async function POST(req: Request) {
     const priceOverrides: Record<string, PriceTruth> = body?.priceOverrides ?? {};
 
     // Load strategy + assignments
-    const s: any = await gql(GET_SETTINGS, { id: "global" });
+    const s: any = await gqlStep("GET_SETTINGS", GET_SETTINGS, { id: "global" });
     const settings = s?.getAppSettings ?? {};
     const strategies: Strategy[] = safeJson(settings.repricerStrategiesJson ?? "[]", []);
     const assignments: Assignment[] = safeJson(settings.repricerAssignmentsJson ?? "[]", []);
@@ -371,7 +364,7 @@ export async function POST(req: Request) {
     let vatRegistered: Record<string, boolean> = {};
     let vatRate: Record<string, number> = {};
     try {
-      const v: any = await gql(GET_VAT, { id: "global" });
+      const v: any = await gqlStep("GET_VAT", GET_VAT, { id: "global" });
       vatRegistered = safeJson(v?.getVatSettings?.vatRegisteredJson ?? "{}", {});
       vatRate = safeJson(v?.getVatSettings?.vatRateJson ?? "{}", {});
     } catch {
@@ -506,125 +499,124 @@ if (ownPrice == null) {
   // when ownPrice exists, your existing logic will overwrite reason
 }
 
-      // If we have enough truth to act, run the “clever” logic
-      if (strategy && ownPrice != null) {
-        const onlySellerMode = String(strategy?.whenOnlySeller ?? "HOLD");
-        const ownBbMode = String(strategy?.whenOwnBuyBox ?? "HOLD");
+        // If we have enough truth to act, run the Ã¢â‚¬Å“cleverÃ¢â‚¬Â logic
+        if (strategy && ownPrice != null) {
+          const onlySellerMode = String(strategy?.whenOnlySeller ?? "HOLD");
+          const ownBbMode = String(strategy?.whenOwnBuyBox ?? "HOLD");
 
-        // Velocity guard triggers BACKOFF when we’re in climb mode and sales drop
-        const guardTrips = velGuardTrips(strategy, baseline, v2);
+          // Velocity guard triggers BACKOFF when weÃ¢â‚¬â„¢re in climb mode and sales drop
+          const guardTrips = !force && velGuardTrips(strategy, baseline, v2);
 
-        if (guardTrips) {
-          action = dryRun ? "DRYRUN" : "BACKOFF";
-          reason = "VELOCITY_GUARD_TRIP";
-          // Real backoff uses stored lastGoodPrice; for now we just recommend reverting to buyBox or holding
-          proposedPrice = buyBoxPrice != null ? round2(buyBoxPrice) : round2(ownPrice);
-        } else {
-          const canClimb = Boolean(isOnlySeller) || Boolean(ownBuyBox);
-          if (canClimb) {
-            const mode = Boolean(isOnlySeller) ? onlySellerMode : ownBbMode;
+          if (guardTrips) {
+            action = dryRun ? "DRYRUN" : "BACKOFF";
+            reason = "VELOCITY_GUARD_TRIP";
+            // Real backoff uses stored lastGoodPrice; for now we just recommend reverting to buyBox or holding
+            proposedPrice = buyBoxPrice != null ? round2(buyBoxPrice) : round2(ownPrice);
+          } else {
+            const canClimb = Boolean(isOnlySeller) || Boolean(ownBuyBox);
+            if (canClimb) {
+              const mode = Boolean(isOnlySeller) ? onlySellerMode : ownBbMode;
 
-            if (mode === "RAISE_TO_MAX" || mode === "GO_MAX") {
-              const maxPrice = Number(strategy?.maxPriceGbp ?? 0);
-              if (maxPrice > 0) {
-                proposedPrice = round2(maxPrice);
+              if (mode === "RAISE_TO_MAX" || mode === "GO_MAX") {
+                const maxPrice = Number(strategy?.maxPriceGbp ?? 0);
+                if (maxPrice > 0) {
+                  proposedPrice = round2(maxPrice);
+                  action = dryRun ? "DRYRUN" : "CLIMB";
+                  reason = "RAISE_TO_MAX";
+                } else {
+                  proposedPrice = round2(ownPrice);
+                  action = dryRun ? "DRYRUN" : "HOLD";
+                  reason = "NO_MAX_SET";
+                }
+              } else if (mode.includes("STEP_UP")) {
+                proposedPrice = computeStepUp(strategy, ownPrice);
                 action = dryRun ? "DRYRUN" : "CLIMB";
-                reason = "RAISE_TO_MAX";
+                reason = "STEP_UP";
               } else {
                 proposedPrice = round2(ownPrice);
                 action = dryRun ? "DRYRUN" : "HOLD";
-                reason = "NO_MAX_SET";
+                reason = "HOLD_OWN_BUYBOX_OR_ONLYSELLER";
               }
-            } else if (mode.includes("STEP_UP")) {
-              proposedPrice = computeStepUp(strategy, ownPrice);
-              action = dryRun ? "DRYRUN" : "CLIMB";
-              reason = "STEP_UP";
+            } else if (buyBoxPrice != null && String(strategy?.priceMatchMode ?? "") === "MATCH_BUYBOX") {
+              proposedPrice = round2(buyBoxPrice);
+              action = dryRun ? "DRYRUN" : "HOLD";
+              reason = "MATCH_BUYBOX";
             } else {
               proposedPrice = round2(ownPrice);
               action = dryRun ? "DRYRUN" : "HOLD";
-              reason = "HOLD_OWN_BUYBOX_OR_ONLYSELLER";
+              reason = "HOLD_NO_BUYBOX_PRICE";
             }
-          } else if (buyBoxPrice != null && String(strategy?.priceMatchMode ?? "") === "MATCH_BUYBOX") {
-            proposedPrice = round2(buyBoxPrice);
-            action = dryRun ? "DRYRUN" : "HOLD";
-            reason = "MATCH_BUYBOX";
-          } else {
-            proposedPrice = round2(ownPrice);
-            action = dryRun ? "DRYRUN" : "HOLD";
-            reason = "HOLD_NO_BUYBOX_PRICE";
           }
         }
-      }
-      const st = await getState(mid, sku);
-const cooldownUntilIso = st?.cooldownUntilIso ?? null;
-const inCooldown = isoInFuture(cooldownUntilIso);
+        
+const st = await getState(mid, sku);
+  const cooldownUntilIso = st?.cooldownUntilIso ?? null;
+  const inCooldown = !force && isoInFuture(cooldownUntilIso);
+              // ---------- PATCH (ONLY when dryRun=0) ----------
+        // Guardrails:
+        // - only MATCH_BUYBOX and BACKOFF
+        // - must have proposedPrice
+        // - must have currency (multi-market safe)
+        // - skip tiny/no-op changes
+        let patched = false;
+        let submissionId: string | null = null;
+        let patchError: string | null = null;
 
-            // ---------- PATCH (ONLY when dryRun=0) ----------
-      // Guardrails:
-      // - only MATCH_BUYBOX and BACKOFF
-      // - must have proposedPrice
-      // - must have currency (multi-market safe)
-      // - skip tiny/no-op changes
-      let patched = false;
-      let submissionId: string | null = null;
-      let patchError: string | null = null;
+        const currency = String(priceTruth?.currency ?? "").trim() || null;
+  const canPatch = reason === "MATCH_BUYBOX" || action === "BACKOFF";
 
-      const currency = String(priceTruth?.currency ?? "").trim() || null;
-const canPatchReason = reason === "MATCH_BUYBOX";
-const canPatchAction = action === "BACKOFF";
-
-if (!dryRun && proposedPrice != null && (canPatchReason || canPatchAction)) {
-  if (inCooldown) {
-    patchError = "COOLDOWN_ACTIVE";
-  } else if (!currency) {
-    patchError = "MISSING_CURRENCY";
-  } else {
-    const current = ownPrice ?? null;
-    const diff = current != null ? Math.abs(proposedPrice - current) : null;
-
-    const isNoop = diff != null && diff < 0.01;
-
-    // NEVER raise price in MATCH_BUYBOX or BACKOFF
-    const wouldRaise = current != null && proposedPrice > current;
-
-    // Only patch if lowering meaningfully (or current unknown)
-    const wouldLower = current == null ? true : proposedPrice <= current - 0.01;
-
-    if (isNoop) {
-      // no-op, do nothing
-    } else if (proposedPrice <= 0) {
-      patchError = "BAD_PROPOSED_PRICE";
-    } else if (wouldRaise) {
-      patchError = "BLOCKED_RAISE_IN_MATCH_OR_BACKOFF";
-    } else if (!wouldLower) {
-      patchError = "NOT_LOWERING";
+if (!dryRun && proposedPrice != null && canPatch) {
+    if (inCooldown) {
+      patchError = "COOLDOWN_ACTIVE";
+    } else if (!currency) {
+      patchError = "MISSING_CURRENCY";
     } else {
-      try {
-        const p = await postJsonBody(`${baseUrl}/api/repricer/patch`, {
-          mid,
-          sku,
-          price: proposedPrice,
-          currency,
-        });
+      const current = ownPrice ?? null;
+      const diff = current != null ? Math.abs(proposedPrice - current) : null;
 
-        patched = Boolean(p?.ok);
-        submissionId = String(p?.resp?.submissionId ?? "") || null;
+      const isNoop = diff != null && diff < 0.01;
 
-        // Best-effort refresh truth after patch so next run doesn't re-patch on stale ownPrice
+      // NEVER raise price in MATCH_BUYBOX or BACKOFF
+      const wouldRaise = current != null && proposedPrice > current;
+
+      // Only patch if lowering meaningfully (or current unknown)
+      const wouldLower = current == null ? true : proposedPrice <= current - 0.01;
+
+      if (isNoop) {
+        // no-op, do nothing
+      } else if (proposedPrice <= 0) {
+        patchError = "BAD_PROPOSED_PRICE";
+      } else if (wouldRaise) {
+        patchError = "BLOCKED_RAISE_IN_MATCH_OR_BACKOFF";
+      } else if (!wouldLower) {
+        patchError = "NOT_LOWERING";
+      } else {
         try {
-          await fetch(
-            `${baseUrl}/api/listings/truth/refresh?mid=${encodeURIComponent(mid)}&sku=${encodeURIComponent(sku)}`,
-            { method: "POST", headers: { "content-type": "application/json" }, body: "{}", cache: "no-store" }
-          );
-        } catch {
-          // ignore
+          const p = await postJsonBody(`${baseUrl}/api/repricer/patch`, {
+            mid,
+            sku,
+            price: proposedPrice,
+            currency,
+          });
+
+          patched = Boolean(p?.ok);
+          submissionId = String(p?.resp?.submissionId ?? "") || null;
+
+          // Best-effort refresh truth after patch so next run doesn't re-patch on stale ownPrice
+          try {
+            await fetch(
+              `${baseUrl}/api/listings/truth/refresh?mid=${encodeURIComponent(mid)}&sku=${encodeURIComponent(sku)}`,
+              { method: "POST", headers: { "content-type": "application/json" }, body: "{}", cache: "no-store" }
+            );
+          } catch {
+            // ignore
+          }
+        } catch (ePatch: any) {
+          patchError = String(ePatch?.message ?? ePatch);
         }
-      } catch (ePatch: any) {
-        patchError = String(ePatch?.message ?? ePatch);
       }
     }
   }
-}
 
 
 // changesToday reset each dayKey
@@ -653,13 +645,13 @@ const stateInput: any = {
 
       // Upsert via create first; if exists, update
       try {
-        await gql(UPSERT_STATE, { input: stateInput });
-      } catch {
-        await gql(UPDATE_STATE, { input: stateInput });
-      }
+  await gqlStep("UPSERT_STATE", UPSERT_STATE, { input: stateInput });
+} catch {
+  await gqlStep("UPDATE_STATE", UPDATE_STATE, { input: stateInput });
+}
 
       const decisionId = `${mid}#${sku}#${ts}`;
-      await gql(CREATE_DECISION, {
+      await gqlStep("CREATE_DECISION", CREATE_DECISION, {
         input: {
           id: decisionId,
           marketplaceId: mid,
@@ -700,3 +692,4 @@ await stampRunKey(settings, `REPRICER:${mid}`);
     return NextResponse.json({ ok: false, error: String(e?.message ?? e) }, { status: 500 });
   }
 }
+

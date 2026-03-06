@@ -1,9 +1,5 @@
 import { NextResponse } from "next/server";
-import outputs from "@/amplify_outputs.json";
-
-const DATA_URL = outputs.data.url;
-const DATA_API_KEY = outputs.data.api_key;
-
+import { DATA_URL, DATA_API_KEY } from "@/lib/dataEnv";
 type GqlResp<T> = { data?: T; errors?: { message: string }[] };
 
 async function gql<T>(query: string, variables?: any): Promise<T> {
@@ -45,7 +41,7 @@ const LIST_SUPPLIERMAP = /* GraphQL */ `
 
 function previewLine(line: string, max = 200) {
   const s = String(line ?? "");
-  return s.length > max ? s.slice(0, max) + "…" : s;
+  return s.length > max ? s.slice(0, max) + "Ã¢â‚¬Â¦" : s;
 }
 
 function parseCsvLine(line: string): string[] {
@@ -236,3 +232,4 @@ export async function POST(req: Request) {
     return NextResponse.json({ ok: false, error: e?.message || String(e) }, { status: 500 });
   }
 }
+

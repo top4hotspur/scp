@@ -49,9 +49,9 @@ export default function Page() {
   return (
     <div className="space-y-4">
       <div>
-        <h1 className="text-2xl font-semibold">Repricer • Status</h1>
+        <h1 className="text-2xl font-semibold">Repricer â€¢ Status</h1>
         <p className="text-white/60">
-          Operational view. This will become the “price pilot” dashboard (Buy Box climb + velocity guard backoff events).
+          Operational view. This will become the â€œprice pilotâ€ dashboard (Buy Box climb + velocity guard backoff events).
         </p>
       </div>
 
@@ -132,7 +132,7 @@ export default function Page() {
           </div>
 
           <div className="mt-2 text-xs text-white/40">
-            Next: we’ll add “PricePilot” state + decision logs here (climb/hold/backoff, last good price, baseline velocity,
+            Next: weâ€™ll add â€œPricePilotâ€ state + decision logs here (climb/hold/backoff, last good price, baseline velocity,
             last 2d velocity, etc.).
           </div>
         </div>

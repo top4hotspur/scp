@@ -10,7 +10,7 @@ export async function spapiFetch<T>(args: {
 }) : Promise<T> {
   const accessToken = await getLwaAccessToken();
 
-  // Endpoint host (EU region) — we’ll keep it stable for now.
+  // Endpoint host (EU region) â€” weâ€™ll keep it stable for now.
   const base = "https://sellingpartnerapi-eu.amazon.com";
   const url = new URL(base + args.path);
 

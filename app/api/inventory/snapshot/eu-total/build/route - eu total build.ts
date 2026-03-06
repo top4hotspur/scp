@@ -144,7 +144,7 @@ export async function POST() {
       needByMid.get(a.mid)!.add(a.sku);
     }
 
-    // fetch each anchor marketplace’s InventorySku list, and pick only the anchored SKUs
+    // fetch each anchor marketplaceâ€™s InventorySku list, and pick only the anchored SKUs
     for (const [mid, skuSet] of needByMid.entries()) {
       const rows = await listAllInventorySkusByMid(mid);
       for (const r of rows) {

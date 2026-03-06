@@ -1,12 +1,7 @@
 // app/api/restock/options/route.ts
 import { NextResponse } from "next/server";
-import outputs from "@/amplify_outputs.json";
-
+import { DATA_URL, DATA_API_KEY } from "@/lib/dataEnv";
 export const runtime = "nodejs";
-
-const DATA_URL = outputs.data.url;
-const DATA_API_KEY = outputs.data.api_key;
-
 type GqlResp<T> = { data?: T; errors?: { message: string }[] };
 
 async function gql<T>(query: string, variables?: any): Promise<T> {
@@ -112,3 +107,4 @@ export async function GET(req: Request) {
     return NextResponse.json({ ok: false, error: e?.message ?? "Unknown error" }, { status: 500 });
   }
 }
+

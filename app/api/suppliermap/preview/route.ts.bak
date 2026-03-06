@@ -1,0 +1,81 @@
+﻿// app/api/suppliermap/preview/route.ts
+import { NextResponse } from "next/server";
+import outputs from "@/amplify_outputs.json";
+
+const DATA_URL = (outputs as any)?.data?.url;
+const DATA_API_KEY = (outputs as any)?.data?.api_key;
+type GqlResp<T> = { data?: T; errors?: { message: string }[] };
+
+async function gql<T>(query: string, variables?: any): Promise<T> {
+  if (!DATA_URL || !DATA_API_KEY) throw new Error("Missing amplify_outputs.json data.url/api_key");
+
+  const res = await fetch(DATA_URL, {
+    method: "POST",
+    headers: { "content-type": "application/json", "x-api-key": DATA_API_KEY },
+    body: JSON.stringify({ query, variables }),
+    cache: "no-store",
+  });
+
+  const json = (await res.json().catch(() => ({}))) as GqlResp<T>;
+  if (!res.ok || json.errors?.length) {
+    throw new Error(json.errors?.map((e) => e.message).join(" | ") || `HTTP ${res.status}`);
+  }
+  return json.data as T;
+}
+
+const LIST = /* GraphQL */ `
+  query ListSupplierMaps($limit: Int, $filter: ModelSupplierMapFilterInput) {
+    listSupplierMaps(limit: $limit, filter: $filter) {
+      items {
+        id
+        sku
+        asin
+        shortTitle
+        supplierName
+        prodGroup1
+        prodGroup2
+        prodGroup3
+        prodGroup4
+        prodGroup5
+        productCost
+        prepCost
+        shippingCost
+        label
+        excludeUk
+        excludeEu
+        updatedAtIso
+      }
+    }
+  }
+`;
+
+export async function GET(req: Request) {
+  try {
+    const url = new URL(req.url);
+
+    const supplier = (url.searchParams.get("supplier") ?? "").trim();
+    const pg = (url.searchParams.get("pg") ?? "").trim(); // prodGroup1
+    const excluded = (url.searchParams.get("excluded") ?? "").trim(); // "", "uk", "eu", "any"
+
+    // Build a conservative filter object (only include fields when used)
+    const filter: any = {};
+
+    if (supplier) filter.supplierName = { contains: supplier };
+    if (pg) filter.prodGroup1 = { eq: pg };
+
+    // excluded=uk => excludeUk=true
+    // excluded=eu => excludeEu=true
+    // excluded=any => excludeUk=true OR excludeEu=true (GraphQL "or")
+    if (excluded === "uk") filter.excludeUk = { eq: true };
+    if (excluded === "eu") filter.excludeEu = { eq: true };
+    if (excluded === "any") filter.or = [{ excludeUk: { eq: true } }, { excludeEu: { eq: true } }];
+
+    const data = await gql<{ listSupplierMaps?: { items?: any[] } }>(LIST, { limit: 50, filter });
+    const items = data?.listSupplierMaps?.items ?? [];
+
+    return NextResponse.json({ ok: true, items });
+  } catch (e: any) {
+    return NextResponse.json({ ok: false, error: String(e?.message ?? e) }, { status: 500 });
+  }
+}
+

@@ -1,10 +1,6 @@
 // app/api/inventory/snapshot/eu-total/build/route.ts
 import { NextResponse } from "next/server";
-import outputs from "@/amplify_outputs.json";
-
-const DATA_URL = outputs.data.url;
-const DATA_API_KEY = outputs.data.api_key;
-
+import { DATA_URL, DATA_API_KEY } from "@/lib/dataEnv";
 type GqlResp<T> = { data?: T; errors?: { message: string }[] };
 
 async function gql(query: string, variables?: any): Promise<any> {
@@ -144,7 +140,7 @@ export async function POST() {
       needByMid.get(a.mid)!.add(a.sku);
     }
 
-    // fetch each anchor marketplace’s InventorySku list, and pick only the anchored SKUs
+    // fetch each anchor marketplaceÃ¢â‚¬â„¢s InventorySku list, and pick only the anchored SKUs
     for (const [mid, skuSet] of needByMid.entries()) {
       const rows = await listAllInventorySkusByMid(mid);
       for (const r of rows) {
@@ -197,3 +193,4 @@ export async function POST() {
     return NextResponse.json({ ok: false, error: String(e?.message ?? e) }, { status: 500 });
   }
 }
+
