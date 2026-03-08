@@ -84,6 +84,10 @@ function londonDayStartDate(now = new Date()): Date {
   return new Date(londonDayStartIso(now));
 }
 
+function normSku(v: unknown): string {
+  return String(v ?? "").trim().toUpperCase();
+}
+
 
 async function loadSupplierCostBySku(): Promise<Map<string, number>> {
   const map = new Map<string, number>();
@@ -98,7 +102,7 @@ async function loadSupplierCostBySku(): Promise<Map<string, number>> {
     const items = data?.listSupplierMaps?.items ?? [];
     for (const it of items) {
       if (!it) continue;
-      const sku = String(it.sku ?? "").trim();
+      const sku = normSku(it.sku);
       if (!sku) continue;
 
       const productCost = Number(it.productCost);
@@ -410,7 +414,7 @@ const windowLines = [...byKey.values()];
             safeNum(x.promoDiscount);
 
           // SupplierMap unit cost (productCost + prepCost + shippingCost)
-const skuKey = String(x.sku ?? "").trim();
+const skuKey = normSku(x.sku);
 
 // Resolve UNIT cost (ex VAT)
 // Priority: SalesLine.supplierCostExVat (if already stored) else SupplierMap-derived cost

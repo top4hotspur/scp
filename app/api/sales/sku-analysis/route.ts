@@ -43,9 +43,53 @@ const LIST_SALESLINES = /* GraphQL */ `
   }
 `;
 
+const LIST_SUPPLIERMAPS = /* GraphQL */ `
+  query ListSupplierMaps($limit: Int, $nextToken: String) {
+    listSupplierMaps(limit: $limit, nextToken: $nextToken) {
+      items {
+        sku
+        productCost
+        prepCost
+        shippingCost
+      }
+      nextToken
+    }
+  }
+`;
+
 function safeNum(n: unknown): number {
   const v = Number(n);
   return Number.isFinite(v) ? v : 0;
+}
+
+function normSku(v: unknown): string {
+  return String(v ?? "").trim().toUpperCase();
+}
+
+async function loadSupplierCostBySku(): Promise<Map<string, number>> {
+  const map = new Map<string, number>();
+  let nextToken: string | null = null;
+
+  do {
+    const vars: Record<string, unknown> = { limit: 1000 };
+    if (nextToken) vars.nextToken = nextToken;
+
+    const data = await gql<{ listSupplierMaps?: { items?: Array<Record<string, unknown> | null> | null; nextToken?: string | null } | null }>(LIST_SUPPLIERMAPS, vars);
+    const items = data?.listSupplierMaps?.items ?? [];
+
+    for (const it of items) {
+      if (!it) continue;
+      const sku = normSku(it.sku);
+      if (!sku) continue;
+
+      const unit = safeNum(it.productCost) + safeNum(it.prepCost) + safeNum(it.shippingCost);
+      if (unit > 0) map.set(sku, unit);
+    }
+
+    nextToken = data?.listSupplierMaps?.nextToken ?? null;
+  } while (nextToken);
+
+  return map;
 }
 
 function withinWindow(iso: string | null | undefined, fromIso: string, toIso: string): boolean {
@@ -87,6 +131,7 @@ export async function GET(req: Request) {
     }
 
     // Load all sales lines (paged) and filter.
+    const supplierCostBySku = await loadSupplierCostBySku();
     let nextToken: string | null = null;
     const all: any[] = [];
 
@@ -105,7 +150,7 @@ export async function GET(req: Request) {
     const lines = all.filter(
       (x) =>
         String(x.marketplaceId ?? "") === mid &&
-        String(x.sku ?? "") === sku &&
+        normSku(x.sku) === normSku(sku) &&
         withinWindow(String(x.shippedAtIso ?? x.purchaseAtIso ?? ""), fromIso, toIso)
     );
 
@@ -117,11 +162,18 @@ export async function GET(req: Request) {
         const revenueExVat =
           safeNum(x.itemPrice) + safeNum(x.shippingPrice) - safeNum(x.promoDiscount);
 
-        const costs =
-          safeNum(x.supplierCostExVat) +
-          safeNum(x.inboundShipping) +
-          safeNum(x.prepCost) +
-          safeNum(x.feeEstimateTotal);
+        const qty = Math.max(1, safeNum(x.qty));
+        const unitCost =
+          (Number.isFinite(Number(x.supplierCostExVat)) ? Number(x.supplierCostExVat) : null) ??
+          supplierCostBySku.get(normSku(x.sku)) ??
+          0;
+
+        const supplierCostLine = unitCost * qty;
+        const inbound = safeNum(x.inboundShipping);
+        const prep = safeNum(x.prepCost);
+        const fees = safeNum(x.feeEstimateTotal);
+
+        const costs = supplierCostLine + inbound + prep + fees;
 
         // Always recompute from current inputs so fee updates are reflected immediately.
         const profit = revenueExVat - costs;

@@ -144,8 +144,8 @@ export default function Page() {
     setErr(null);
     try {
       const url = isCombined
-        ? `/api/sales/combined-snapshot?bucket=${encodeURIComponent(period)}`
-        : `/api/sales/snapshot?mid=${encodeURIComponent(market)}&bucket=${encodeURIComponent(period)}`;
+        ? `/api/sales/combined-snapshot?bucket=${encodeURIComponent(period)}&fresh=1`
+        : `/api/sales/snapshot?mid=${encodeURIComponent(market)}&bucket=${encodeURIComponent(period)}&fresh=1`;
 
       const res = await fetch(url, { cache: "no-store" });
       const json = await res.json().catch(() => ({}));
