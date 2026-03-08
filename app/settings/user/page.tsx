@@ -1,4 +1,3 @@
-//app/settings/user/page.tsx
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
@@ -37,19 +36,45 @@ const REPORTS: { key: ReportKey; title: string; desc: string }[] = [
   {
     key: "SALES_ORDERS",
     title: "Sales — Orders report",
-    desc: "Near-real-time sales feed (includes unshipped). Used for Overview â€˜Today so farâ€™.",
+    desc: "Near-real-time sales feed (includes unshipped). Used for Overview ‘Today so far’.",
   },
   {
-  key: "SALES_BUILD_SNAPSHOT",
-  title: "Sales — Build snapshot",
-  desc: "Rebuild SalesSnapshot buckets from stored SalesLine rows (keeps MI Sales page live).",
-},
+    key: "SALES_BUILD_SNAPSHOT",
+    title: "Sales — Build snapshot",
+    desc: "Rebuild SalesSnapshot buckets from stored SalesLine rows (keeps MI Sales page live).",
+  },
   {
     key: "SALES_CANCELLATIONS",
     title: "Sales — Cancellations report",
     desc: "Daily cleanup for cancelled/unshipped orders to keep Overview accurate.",
   },
 ];
+
+type CountryCode = "GB" | "DE" | "FR" | "IT" | "ES" | "NL" | "SE" | "PL";
+
+const VAT_COUNTRIES: { code: CountryCode; label: string }[] = [
+  { code: "GB", label: "United Kingdom" },
+  { code: "DE", label: "Germany" },
+  { code: "FR", label: "France" },
+  { code: "IT", label: "Italy" },
+  { code: "ES", label: "Spain" },
+  { code: "NL", label: "Netherlands" },
+  { code: "SE", label: "Sweden" },
+  { code: "PL", label: "Poland" },
+];
+
+// Seed values only for first load / empty settings.
+// User can override and save.
+const DEFAULT_VAT_RATES: Record<CountryCode, number> = {
+  GB: 20,
+  DE: 19,
+  FR: 20,
+  IT: 22,
+  ES: 21,
+  NL: 21,
+  SE: 25,
+  PL: 23,
+};
 
 function safeJson<T>(s: any, fallback: T): T {
   try {
@@ -66,22 +91,31 @@ function clampHour(n: any, fallback: number) {
   return Math.max(0, Math.min(23, Math.trunc(x)));
 }
 
+function toPctNumber(v: any, fallback = 0) {
+  const n = Number(v);
+  return Number.isFinite(n) ? n : fallback;
+}
+
 export default function Page() {
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [okMsg, setOkMsg] = useState<string | null>(null);
 
-  // day/night window
   const [dayStartHour, setDayStartHour] = useState(7);
   const [dayEndHour, setDayEndHour] = useState(22);
 
-  // report cadence
   const [cadences, setCadences] = useState<Record<string, { day: CadenceKey; night: CadenceKey }>>({
-  SALES_ORDERS: { day: "15m", night: "1hr" },
-  SALES_BUILD_SNAPSHOT: { day: "15m", night: "1hr" },
-  SALES_CANCELLATIONS: { day: "Daily", night: "Daily" },
-});
+    SALES_ORDERS: { day: "15m", night: "1hr" },
+    SALES_BUILD_SNAPSHOT: { day: "15m", night: "1hr" },
+    SALES_CANCELLATIONS: { day: "Daily", night: "Daily" },
+  });
+
+  const [supplierMapCostsIncludeVat, setSupplierMapCostsIncludeVat] = useState(false);
+  const [vatRegisteredCountries, setVatRegisteredCountries] = useState<CountryCode[]>(["GB"]);
+  const [vatRatesByCountry, setVatRatesByCountry] = useState<Record<string, number>>({
+    ...DEFAULT_VAT_RATES,
+  });
 
   async function load() {
     setLoading(true);
@@ -101,9 +135,21 @@ export default function Page() {
         s.reportCadenceByReportJson ?? "{}",
         {}
       );
-
-      // merge defaults + persisted
       setCadences((prev) => ({ ...prev, ...fromJson }));
+
+      setSupplierMapCostsIncludeVat(Boolean(s.supplierMapCostsIncludeVat));
+
+      const savedCountries = safeJson<CountryCode[]>(
+        s.vatRegisteredCountriesJson ?? '["GB"]',
+        ["GB"]
+      );
+      setVatRegisteredCountries(savedCountries);
+
+      const savedRates = safeJson<Record<string, number>>(
+        s.vatRatesByCountryJson ?? "{}",
+        {}
+      );
+      setVatRatesByCountry({ ...DEFAULT_VAT_RATES, ...savedRates });
     } catch (e: any) {
       setErr(e?.message || String(e));
     } finally {
@@ -124,6 +170,9 @@ export default function Page() {
         reportDayStartHour: dayStartHour,
         reportDayEndHour: dayEndHour,
         reportCadenceByReportJson: JSON.stringify(cadences),
+        supplierMapCostsIncludeVat,
+        vatRegisteredCountriesJson: JSON.stringify(vatRegisteredCountries),
+        vatRatesByCountryJson: JSON.stringify(vatRatesByCountry),
       };
 
       const r = await fetch("/api/settings/app", {
@@ -147,7 +196,24 @@ export default function Page() {
   function setReportCadence(reportKey: string, which: "day" | "night", value: CadenceKey) {
     setCadences((prev) => ({
       ...prev,
-      [reportKey]: { day: prev?.[reportKey]?.day ?? "Daily", night: prev?.[reportKey]?.night ?? "Daily", [which]: value },
+      [reportKey]: {
+        day: prev?.[reportKey]?.day ?? "Daily",
+        night: prev?.[reportKey]?.night ?? "Daily",
+        [which]: value,
+      },
+    }));
+  }
+
+  function toggleVatCountry(code: CountryCode) {
+    setVatRegisteredCountries((prev) =>
+      prev.includes(code) ? prev.filter((x) => x !== code) : [...prev, code]
+    );
+  }
+
+  function setVatRate(code: CountryCode, value: string) {
+    setVatRatesByCountry((prev) => ({
+      ...prev,
+      [code]: toPctNumber(value, prev[code] ?? DEFAULT_VAT_RATES[code]),
     }));
   }
 
@@ -155,9 +221,9 @@ export default function Page() {
     <div className="space-y-4">
       <div className="flex items-end justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-semibold">Settings • Reporting</h1>
+          <h1 className="text-2xl font-semibold">Settings • Reporting & VAT</h1>
           <p className="text-white/60">
-            Configure day/night cadence per report. Scheduler tick reads these settings (STK-style).
+            Configure scheduler cadence and VAT behaviour used by Overview profit calculations.
           </p>
         </div>
 
@@ -183,6 +249,51 @@ export default function Page() {
 
       {err ? <div className="rounded-2xl border border-red-500/30 bg-red-500/10 p-3 text-sm text-red-200">{err}</div> : null}
       {okMsg ? <div className="rounded-2xl border border-emerald-500/30 bg-emerald-500/10 p-3 text-sm text-emerald-200">{okMsg}</div> : null}
+
+      <div className="rounded-2xl border border-white/10 bg-white/5 p-4 space-y-3">
+        <div className="text-sm font-semibold">VAT settings</div>
+        <div className="text-xs text-white/60">
+          Choose the countries where you are VAT registered and override rates if needed. These settings are used when stripping VAT from SupplierMap costs in Overview.
+        </div>
+
+        <label className="flex items-center gap-2 text-sm text-white/80">
+          <input
+            type="checkbox"
+            checked={supplierMapCostsIncludeVat}
+            onChange={(e) => setSupplierMapCostsIncludeVat(e.target.checked)}
+          />
+          SupplierMap costs include VAT
+        </label>
+
+        <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4">
+          {VAT_COUNTRIES.map((c) => {
+            const selected = vatRegisteredCountries.includes(c.code);
+            return (
+              <div key={c.code} className="rounded-2xl border border-white/10 bg-black/20 p-3 space-y-2">
+                <label className="flex items-center gap-2 text-sm">
+                  <input
+                    type="checkbox"
+                    checked={selected}
+                    onChange={() => toggleVatCountry(c.code)}
+                  />
+                  <span>{c.label}</span>
+                </label>
+
+                <label className="space-y-1 block">
+                  <div className="text-xs text-white/60">VAT rate %</div>
+                  <input
+                    type="number"
+                    step="0.1"
+                    value={vatRatesByCountry[c.code] ?? DEFAULT_VAT_RATES[c.code]}
+                    onChange={(e) => setVatRate(c.code, e.target.value)}
+                    className="w-full rounded-xl border border-white/10 bg-black/30 px-3 py-2 text-sm outline-none"
+                  />
+                </label>
+              </div>
+            );
+          })}
+        </div>
+      </div>
 
       <div className="rounded-2xl border border-white/10 bg-white/5 p-4 space-y-3">
         <div className="text-sm font-semibold">Daytime window</div>
@@ -272,10 +383,6 @@ export default function Page() {
               </div>
             );
           })}
-        </div>
-
-        <div className="text-xs text-white/60">
-          Next: we'll add a "Run now" button per report once the downloader endpoints exist.
         </div>
       </div>
     </div>
