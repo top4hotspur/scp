@@ -110,6 +110,14 @@ reportBackfillDays: a.integer(),
       updatedAtIso: a.string().required(),
       salesCadenceJson: a.string(),
       salesLastRunByKeyJson: a.string(),
+
+      //VAT Settings
+      vatRegisteredCountriesJson: a.string(),
+vatRatesByCountryJson: a.string(),
+supplierMapCostsIncludeVat: a.boolean(),
+
+      eurToGbpRate: a.float(),                  // manual fallback, e.g. 0.86
+overviewSnapshotCadenceMinutes: a.integer(),
     })
     .authorization((allow) => [allow.publicApiKey()]),
 
@@ -124,6 +132,46 @@ reportBackfillDays: a.integer(),
       updatedAtIso: a.string().required(),
     })
     .authorization((allow) => [allow.publicApiKey()]),
+
+    OverviewSnapshot: a
+  .model({
+    marketplaceId: a.string().required(),   // "GLOBAL" for combined overview
+    bucket: a.string().required(),          // "latest"
+
+    createdAtIso: a.string().required(),
+    source: a.string(),                     // "builder"
+    status: a.string(),                     // "OK" | "ERROR"
+    message: a.string(),
+
+    // profit cards
+    profitTodayGbp: a.float(),
+    profitYesterdayGbp: a.float(),
+    profitYesterdayPrevGbp: a.float(),
+    profit7dGbp: a.float(),
+    profitPrev7dGbp: a.float(),
+    profit30dGbp: a.float(),
+    profitPrev30dGbp: a.float(),
+    salesTodayGbp: a.float(),
+salesYesterdayGbp: a.float(),
+sales7dGbp: a.float(),
+sales30dGbp: a.float(),
+
+    // last 10 sales
+    last10SalesJson: a.json(),
+
+    // supplier stock risk
+    supplierRiskJson: a.json(),
+
+    // optional debug metadata
+    salesRowsUsed: a.integer(),
+    supplierRowsUsed: a.integer(),
+    inventoryRowsUsed: a.integer(),
+
+    
+  })
+  .authorization((allow) => [allow.publicApiKey()])
+  .identifier(["marketplaceId", "bucket"]),
+
 
   // ---------------------------------------------------------------------------
   // Viewer session (Active Viewer Gate)
