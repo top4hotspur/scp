@@ -431,12 +431,8 @@ const prep = safeNum(x.prepCost);
 
 const costs = supplierCostLine + inbound + prep + fees;
 
-// If upstream already computed profitExVat, trust it; else compute
-const computedProfit = revenueExVat - costs;
-const profit =
-  Number.isFinite(Number(x.profitExVat)) && x.profitExVat != null
-    ? Number(x.profitExVat)
-    : computedProfit;
+// Always recompute profit from current cost truth so fee updates flow through snapshots.
+const profit = revenueExVat - costs;
 
 const marginPct = revenueExVat > 0 ? (profit / revenueExVat) * 100 : null;
 
