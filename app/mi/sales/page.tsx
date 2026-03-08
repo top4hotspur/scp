@@ -53,19 +53,19 @@ function labelForMid(mid: string): string {
 
 function fmtMoney(v: any): string {
   const n = Number(v);
-  if (!Number.isFinite(n)) return "â€”";
+  if (!Number.isFinite(n)) return "—";
   return n.toFixed(2);
 }
 
 function fmtPct(v: any): string {
   const n = Number(v);
-  if (!Number.isFinite(n)) return "â€”";
+  if (!Number.isFinite(n)) return "—";
   return `${n.toFixed(1)}%`;
 }
 
 function fmtDt(iso: any): string {
   const s = String(iso ?? "").trim();
-  if (!s) return "â€”";
+  if (!s) return "—";
   const d = new Date(s);
   if (Number.isNaN(d.getTime())) return s;
   // dd/mm/yyyy hh:mm
@@ -78,7 +78,7 @@ function fmtDt(iso: any): string {
 }
 
 function RedX() {
-  return <span className="text-red-300 font-semibold">âœ•</span>;
+  return <span className="text-red-300 font-semibold">✕</span>;
 }
 
 export default function Page() {
@@ -289,7 +289,7 @@ export default function Page() {
             <tbody>
               {rows.length ? (
                 rows.map((r, idx) => {
-                  const title = r.shortTitle || r.listingTitle || r.sku || "â€”";
+                  const title = r.shortTitle || r.listingTitle || r.sku || "—";
                   const mid = String(r.marketplaceId ?? "");
                   const dt = r.shippedAtIso || r.purchaseAtIso || null;
 
@@ -318,14 +318,14 @@ export default function Page() {
                         <div className="text-xs text-white/60">{r.sku}</div>
                       </td>
                       <td className="py-2 pr-3">{labelForMid(mid)}</td>
-                      <td className="py-2 pr-3 text-right">{r.qty ?? "â€”"}</td>
+                      <td className="py-2 pr-3 text-right">{r.qty ?? "—"}</td>
                       <td className="py-2 pr-3">{fmtDt(dt)}</td>
                       <td className="py-2 pr-3 text-right">{price}</td>
                       <td className="py-2 pr-3 text-right">{missing ? <RedX /> : profit}</td>
                       <td className="py-2 pr-3 text-right">{missing ? <RedX /> : roi}</td>
                       <td className="py-2 pr-3 text-right">{missing ? <RedX /> : margin}</td>
                       <td className="py-2 text-right">
-  {Number.isFinite(Number(r.stockAvailable)) ? Number(r.stockAvailable) : <span className="text-white/60">â€”</span>}
+  {Number.isFinite(Number(r.stockAvailable)) ? Number(r.stockAvailable) : <span className="text-white/60">—</span>}
 </td>
                     </tr>
                   );
@@ -358,8 +358,8 @@ export default function Page() {
               {topSellers.length ? (
                 topSellers.map((t, idx) => (
                   <tr key={`${t.sku ?? idx}-${idx}`} className="border-b border-white/5">
-                    <td className="py-2 pr-3 font-medium">{t.sku ?? "â€”"}</td>
-                    <td className="py-2 pr-3 text-right">{t.units ?? "â€”"}</td>
+                    <td className="py-2 pr-3 font-medium">{t.sku ?? "—"}</td>
+                    <td className="py-2 pr-3 text-right">{t.units ?? "—"}</td>
                     <td className="py-2 pr-3 text-right">{fmtMoney(t.profit)}</td>
                     <td className="py-2 text-right">
                       <button

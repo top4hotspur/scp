@@ -1,128 +1,146 @@
-//app/mi/overview/page.tsx
 "use client";
 
 import { useEffect, useState } from "react";
-import ProfitCard from "@/components/overview/ProfitCard";
-import LastSalesPanel from "@/components/overview/LastSalesPanel";
-import SupplierRiskTable from "@/components/overview/SupplierRiskTable";
+
+type Bucket = "today" | "yesterday" | "7d" | "30d";
+
+type Totals = {
+  rows?: number;
+  rowsWithCompleteCosts?: number;
+  units?: number;
+  profitExVat?: number;
+};
+
+type Snap = {
+  rows: any[];
+  totals: Totals;
+  error?: string;
+};
+
+function fmtMoney(v: unknown) {
+  const n = Number(v);
+  return Number.isFinite(n) ? `£${n.toFixed(2)}` : "—";
+}
+
+function fmtInt(v: unknown) {
+  const n = Number(v);
+  return Number.isFinite(n) ? String(Math.trunc(n)) : "—";
+}
+
+async function loadBucket(bucket: Bucket): Promise<Snap> {
+  const res = await fetch(`/api/sales/combined-snapshot?bucket=${encodeURIComponent(bucket)}&fresh=1`, { cache: "no-store" });
+  const json = await res.json().catch(() => ({}));
+  if (!res.ok || !json?.ok) return { rows: [], totals: {}, error: json?.error ?? `HTTP ${res.status}` };
+  return {
+    rows: Array.isArray(json.rows) ? json.rows : [],
+    totals: (json.totals ?? {}) as Totals,
+  };
+}
 
 export default function OverviewPage() {
-  const [loading, setLoading] = useState(true);
-  const [cards, setCards] = useState<any>(null);
-  const [snapshot, setSnapshot] = useState<any>(null);
-  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+  const [today, setToday] = useState<Snap>({ rows: [], totals: {} });
+  const [yesterday, setYesterday] = useState<Snap>({ rows: [], totals: {} });
+  const [d7, setD7] = useState<Snap>({ rows: [], totals: {} });
+  const [d30, setD30] = useState<Snap>({ rows: [], totals: {} });
 
-  async function load() {
+  async function loadAll() {
+    setLoading(true);
+    setErr(null);
     try {
-      setLoading(true);
-      setError("");
-
-      const res = await fetch("/api/overview/snapshot/latest", { cache: "no-store" });
-      const json = await res.json();
-
-      if (!json?.ok) {
-        throw new Error(json?.error || "Failed to load overview snapshot");
-      }
-
-      setSnapshot(json.snapshot);
-      setCards(json.cards);
-    } catch (err: any) {
-      setError(err?.message || "Failed to load overview");
+      const [a, b, c, d] = await Promise.all([
+        loadBucket("today"),
+        loadBucket("yesterday"),
+        loadBucket("7d"),
+        loadBucket("30d"),
+      ]);
+      setToday(a);
+      setYesterday(b);
+      setD7(c);
+      setD30(d);
+      const e = a.error || b.error || c.error || d.error;
+      if (e) setErr(e);
     } finally {
       setLoading(false);
     }
   }
 
   useEffect(() => {
-    load();
+    loadAll();
   }, []);
 
-  async function rebuild() {
-    try {
-      setLoading(true);
-      setError("");
-
-      const res = await fetch("/api/overview/build-snapshot", {
-        method: "POST",
-      });
-      const json = await res.json();
-
-      if (!json?.ok) {
-        throw new Error(json?.error || "Failed to rebuild overview snapshot");
-      }
-
-      await load();
-    } catch (err: any) {
-      setError(err?.message || "Failed to rebuild snapshot");
-      setLoading(false);
-    }
-  }
+  const last10 = today.rows.slice(0, 10);
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between gap-4">
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-xl font-semibold text-white">Overview</h1>
-          <p className="text-sm text-white/50">Snapshot-first MI dashboard</p>
+          <h1 className="text-3xl font-semibold">Overview</h1>
+          <p className="text-white/60">Snapshot-first MI dashboard (fee-aware, cost-complete rows only for profit totals).</p>
         </div>
-
         <button
-          onClick={rebuild}
-          className="rounded-xl border border-white/10 bg-white/5 px-4 py-2 text-sm text-white hover:bg-white/10"
+          onClick={loadAll}
+          disabled={loading}
+          className="rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm hover:bg-white/10 disabled:opacity-50"
         >
-          Refresh Overview Snapshot
+          {loading ? "Refreshing…" : "Refresh Overview Snapshot"}
         </button>
       </div>
 
-      {error ? (
-        <div className="rounded-xl bg-red-500/10 p-3 text-sm text-red-300">
-          {error}
+      {err ? <div className="rounded-2xl border border-red-500/30 bg-red-500/10 p-3 text-sm text-red-200">{err}</div> : null}
+
+      <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+        <Card title="Profit Today" totals={today.totals} />
+        <Card title="Profit Yesterday" totals={yesterday.totals} />
+        <Card title="Profit Last 7 Days" totals={d7.totals} />
+        <Card title="Profit Last 30 Days" totals={d30.totals} />
+      </div>
+
+      <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
+        <h2 className="mb-3 text-lg font-semibold">Last 10 Sales (Today bucket)</h2>
+        <div className="overflow-auto">
+          <table className="w-full text-sm">
+            <thead className="text-white/60">
+              <tr className="border-b border-white/10">
+                <th className="py-2 pr-3 text-left">SKU / Product</th>
+                <th className="py-2 pr-3 text-right">Costs complete</th>
+                <th className="py-2 pr-3 text-right">Selling Price</th>
+                <th className="py-2 text-right">Profit</th>
+              </tr>
+            </thead>
+            <tbody>
+              {last10.length ? (
+                last10.map((r, i) => (
+                  <tr key={`${r.sku ?? i}-${i}`} className="border-b border-white/5">
+                    <td className="py-2 pr-3">
+                      <div className="font-medium">{r.sku ?? "—"}</div>
+                      <div className="text-white/60">{r.shortTitle ?? r.listingTitle ?? "—"}</div>
+                    </td>
+                    <td className="py-2 pr-3 text-right">{r.missingCostFields ? "No" : "Yes"}</td>
+                    <td className="py-2 pr-3 text-right">{fmtMoney(r.revenueExVat)}</td>
+                    <td className="py-2 text-right text-emerald-300">{r.missingCostFields ? "—" : fmtMoney(r.profitExVat)}</td>
+                  </tr>
+                ))
+              ) : (
+                <tr>
+                  <td colSpan={4} className="py-4 text-center text-white/60">No rows yet.</td>
+                </tr>
+              )}
+            </tbody>
+          </table>
         </div>
-      ) : null}
+      </div>
+    </div>
+  );
+}
 
-      {loading ? (
-        <div className="text-white/60">Loading overview…</div>
-      ) : (
-        <>
-                    <div
-            style={{
-              display: "grid",
-              gridTemplateColumns: "repeat(4, minmax(0, 1fr))",
-              gap: "16px",
-              alignItems: "stretch",
-            }}
-          >
-            <ProfitCard
-              title="Profit Today"
-              value={cards?.today?.value || 0}
-              salesTotal={cards?.today?.salesTotal || 0}
-              deltaPct={null}
-            />
-            <ProfitCard
-              title="Profit Yesterday"
-              value={cards?.yesterday?.value || 0}
-              salesTotal={cards?.yesterday?.salesTotal || 0}
-              deltaPct={cards?.yesterday?.deltaPct ?? null}
-            />
-            <ProfitCard
-              title="Profit Last 7 Days"
-              value={cards?.d7?.value || 0}
-              salesTotal={cards?.d7?.salesTotal || 0}
-              deltaPct={cards?.d7?.deltaPct ?? null}
-            />
-            <ProfitCard
-              title="Profit Last 30 Days"
-              value={cards?.d30?.value || 0}
-              salesTotal={cards?.d30?.salesTotal || 0}
-              deltaPct={cards?.d30?.deltaPct ?? null}
-            />
-          </div>
-
-          <LastSalesPanel rows={snapshot?.last10SalesJson || []} />
-
-          <SupplierRiskTable rows={snapshot?.supplierRiskJson || []} />
-        </>
-      )}
+function Card({ title, totals }: { title: string; totals: Totals }) {
+  return (
+    <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
+      <div className="mb-1 text-xs uppercase tracking-wide text-white/60">{title}</div>
+      <div className="text-4xl font-semibold">{fmtMoney(totals.profitExVat)}</div>
+      <div className="mt-1 text-white/60">{fmtInt(totals.rowsWithCompleteCosts)} / {fmtInt(totals.rows)} rows cost-complete.</div>
     </div>
   );
 }

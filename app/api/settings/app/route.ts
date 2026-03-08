@@ -21,6 +21,11 @@ const GET_ONE = /* GraphQL */ `
       inventoryLastRunByKeyJson
       updatedAtIso
       salesCadenceJson
+      reportDayStartHour
+      reportDayEndHour
+      reportCadenceByReportJson
+      reportPendingByKeyJson
+      reportLastSuccessByKeyJson
     }
   }
 `;
@@ -68,7 +73,17 @@ function defaultSettings() {
     inventoryCoverageScanCadenceMinutesEu: 10080,
 
     // EU coverage scan cursor (throttled: one marketplace per run)
-    
+
+    reportDayStartHour: 7,
+    reportDayEndHour: 22,
+    reportCadenceByReportJson: JSON.stringify({
+      "sales.orders": { enabled: true, dayMinutes: 15, nightMinutes: 60 },
+      "sales.snapshot": { enabled: true, dayMinutes: 15, nightMinutes: 60 },
+      "sales.cancellations": { enabled: true, dayMinutes: 1440, nightMinutes: 1440 },
+      "fee.estimate": { enabled: true, dayMinutes: 1440, nightMinutes: 1440 },
+    }),
+    reportPendingByKeyJson: "{}",
+    reportLastSuccessByKeyJson: "{}",
 
     inventoryLastRunByKeyJson: "{}",
     updatedAtIso: now,
@@ -145,6 +160,31 @@ const input = {
     body?.inventoryCoverageScanCadenceMinutesEu !== undefined
       ? safeNum(body.inventoryCoverageScanCadenceMinutesEu, 10080)
       : safeNum(base.inventoryCoverageScanCadenceMinutesEu, 10080),
+
+  reportDayStartHour:
+    body?.reportDayStartHour !== undefined
+      ? safeNum(body.reportDayStartHour, 7)
+      : safeNum(base.reportDayStartHour, 7),
+
+  reportDayEndHour:
+    body?.reportDayEndHour !== undefined
+      ? safeNum(body.reportDayEndHour, 22)
+      : safeNum(base.reportDayEndHour, 22),
+
+  reportCadenceByReportJson:
+    body?.reportCadenceByReportJson !== undefined
+      ? String(body.reportCadenceByReportJson)
+      : String(base.reportCadenceByReportJson ?? "{}"),
+
+  reportPendingByKeyJson:
+    body?.reportPendingByKeyJson !== undefined
+      ? String(body.reportPendingByKeyJson)
+      : String(base.reportPendingByKeyJson ?? "{}"),
+
+  reportLastSuccessByKeyJson:
+    body?.reportLastSuccessByKeyJson !== undefined
+      ? String(body.reportLastSuccessByKeyJson)
+      : String(base.reportLastSuccessByKeyJson ?? "{}"),
 
   inventoryLastRunByKeyJson:
     body?.inventoryLastRunByKeyJson !== undefined

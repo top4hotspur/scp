@@ -483,6 +483,8 @@ return {
         .sort((a, c) => c.units - a.units)
         .slice(0, 10);
 
+      const completeRows = rows.filter((r) => !r.missingCostFields);
+
       const input = {
         marketplaceId: mid,
         bucket: b.bucket,
@@ -491,8 +493,9 @@ return {
         topSellersJson: JSON.stringify(topSellers),
         totalsJson: JSON.stringify({
           rows: rows.length,
+          rowsWithCompleteCosts: completeRows.length,
           units: rows.reduce((s, r) => s + safeNum(r.qty), 0),
-          profitExVat: rows.reduce((s, r) => s + safeNum(r.profitExVat), 0),
+          profitExVat: completeRows.reduce((s, r) => s + safeNum(r.profitExVat), 0),
         }),
       };
 

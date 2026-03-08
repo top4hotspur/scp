@@ -17,64 +17,45 @@ type CadenceKey =
   | "Weekly"
   | "Monthly";
 
-const CADENCE_OPTIONS: { key: CadenceKey; label: string }[] = [
-  { key: "15m", label: "15m" },
-  { key: "30m", label: "30m" },
-  { key: "1hr", label: "1hr" },
-  { key: "2hr", label: "2hr" },
-  { key: "3hr", label: "3hr" },
-  { key: "6hr", label: "6hr" },
-  { key: "12hr", label: "12hr" },
-  { key: "Daily", label: "Daily" },
-  { key: "Weekly", label: "Weekly" },
-  { key: "Monthly", label: "Monthly" },
+const CADENCE_OPTIONS: { key: CadenceKey; label: string; minutes: number }[] = [
+  { key: "15m", label: "15m", minutes: 15 },
+  { key: "30m", label: "30m", minutes: 30 },
+  { key: "1hr", label: "1hr", minutes: 60 },
+  { key: "2hr", label: "2hr", minutes: 120 },
+  { key: "3hr", label: "3hr", minutes: 180 },
+  { key: "6hr", label: "6hr", minutes: 360 },
+  { key: "12hr", label: "12hr", minutes: 720 },
+  { key: "Daily", label: "Daily", minutes: 1440 },
+  { key: "Weekly", label: "Weekly", minutes: 10080 },
+  { key: "Monthly", label: "Monthly", minutes: 43200 },
 ];
 
-type ReportKey = "SALES_ORDERS" | "SALES_BUILD_SNAPSHOT" | "SALES_CANCELLATIONS";
+type ReportKey = "sales.orders" | "sales.snapshot" | "sales.cancellations" | "fee.estimate";
 
 const REPORTS: { key: ReportKey; title: string; desc: string }[] = [
   {
-    key: "SALES_ORDERS",
+    key: "sales.orders",
     title: "Sales — Orders report",
     desc: "Near-real-time sales feed (includes unshipped). Used for Overview ‘Today so far’.",
   },
   {
-    key: "SALES_BUILD_SNAPSHOT",
+    key: "sales.snapshot",
     title: "Sales — Build snapshot",
     desc: "Rebuild SalesSnapshot buckets from stored SalesLine rows (keeps MI Sales page live).",
   },
   {
-    key: "SALES_CANCELLATIONS",
+    key: "sales.cancellations",
     title: "Sales — Cancellations report",
     desc: "Daily cleanup for cancelled/unshipped orders to keep Overview accurate.",
   },
+  {
+    key: "fee.estimate",
+    title: "Fees — Estimate",
+    desc: "Persist fee estimates to SalesLine and include them in profit calculations.",
+  },
 ];
 
-type CountryCode = "GB" | "DE" | "FR" | "IT" | "ES" | "NL" | "SE" | "PL";
-
-const VAT_COUNTRIES: { code: CountryCode; label: string }[] = [
-  { code: "GB", label: "United Kingdom" },
-  { code: "DE", label: "Germany" },
-  { code: "FR", label: "France" },
-  { code: "IT", label: "Italy" },
-  { code: "ES", label: "Spain" },
-  { code: "NL", label: "Netherlands" },
-  { code: "SE", label: "Sweden" },
-  { code: "PL", label: "Poland" },
-];
-
-// Seed values only for first load / empty settings.
-// User can override and save.
-const DEFAULT_VAT_RATES: Record<CountryCode, number> = {
-  GB: 20,
-  DE: 19,
-  FR: 20,
-  IT: 22,
-  ES: 21,
-  NL: 21,
-  SE: 25,
-  PL: 23,
-};
+type UiCadence = Record<string, { day: CadenceKey; night: CadenceKey }>;
 
 function safeJson<T>(s: any, fallback: T): T {
   try {
@@ -91,9 +72,31 @@ function clampHour(n: any, fallback: number) {
   return Math.max(0, Math.min(23, Math.trunc(x)));
 }
 
-function toPctNumber(v: any, fallback = 0) {
-  const n = Number(v);
-  return Number.isFinite(n) ? n : fallback;
+function cadenceToMinutes(c: CadenceKey): number {
+  return CADENCE_OPTIONS.find((x) => x.key === c)?.minutes ?? 1440;
+}
+
+function minutesToCadence(minutes: unknown): CadenceKey {
+  const m = Number(minutes);
+  if (!Number.isFinite(m) || m <= 0) return "Daily";
+  const exact = CADENCE_OPTIONS.find((x) => x.minutes === m);
+  if (exact) return exact.key;
+  if (m <= 15) return "15m";
+  if (m <= 30) return "30m";
+  if (m <= 60) return "1hr";
+  if (m <= 120) return "2hr";
+  if (m <= 180) return "3hr";
+  if (m <= 360) return "6hr";
+  if (m <= 720) return "12hr";
+  return "Daily";
+}
+
+function fmtIso(iso: unknown): string {
+  const s = String(iso ?? "").trim();
+  if (!s) return "—";
+  const d = new Date(s);
+  if (Number.isNaN(d.getTime())) return s;
+  return d.toLocaleString();
 }
 
 export default function Page() {
@@ -105,17 +108,16 @@ export default function Page() {
   const [dayStartHour, setDayStartHour] = useState(7);
   const [dayEndHour, setDayEndHour] = useState(22);
 
-  const [cadences, setCadences] = useState<Record<string, { day: CadenceKey; night: CadenceKey }>>({
-    SALES_ORDERS: { day: "15m", night: "1hr" },
-    SALES_BUILD_SNAPSHOT: { day: "15m", night: "1hr" },
-    SALES_CANCELLATIONS: { day: "Daily", night: "Daily" },
+  // report cadence
+  const [cadences, setCadences] = useState<UiCadence>({
+    "sales.orders": { day: "15m", night: "1hr" },
+    "sales.snapshot": { day: "15m", night: "1hr" },
+    "sales.cancellations": { day: "Daily", night: "Daily" },
+    "fee.estimate": { day: "Daily", night: "Daily" },
   });
 
-  const [supplierMapCostsIncludeVat, setSupplierMapCostsIncludeVat] = useState(false);
-  const [vatRegisteredCountries, setVatRegisteredCountries] = useState<CountryCode[]>(["GB"]);
-  const [vatRatesByCountry, setVatRatesByCountry] = useState<Record<string, number>>({
-    ...DEFAULT_VAT_RATES,
-  });
+  const [lastRunByKey, setLastRunByKey] = useState<Record<string, string>>({});
+  const [lastSuccessByKey, setLastSuccessByKey] = useState<Record<string, string>>({});
 
   async function load() {
     setLoading(true);
@@ -131,25 +133,24 @@ export default function Page() {
       setDayStartHour(clampHour(s.reportDayStartHour, 7));
       setDayEndHour(clampHour(s.reportDayEndHour, 22));
 
-      const fromJson = safeJson<Record<string, { day: CadenceKey; night: CadenceKey }>>(
+      const rawCadence = safeJson<Record<string, { enabled?: boolean; dayMinutes?: number; nightMinutes?: number }>>(
         s.reportCadenceByReportJson ?? "{}",
         {}
       );
-      setCadences((prev) => ({ ...prev, ...fromJson }));
 
-      setSupplierMapCostsIncludeVat(Boolean(s.supplierMapCostsIncludeVat));
+      setCadences((prev) => {
+        const next: UiCadence = { ...prev };
+        for (const [k, v] of Object.entries(rawCadence)) {
+          next[k] = {
+            day: minutesToCadence(v?.dayMinutes),
+            night: minutesToCadence(v?.nightMinutes),
+          };
+        }
+        return next;
+      });
 
-      const savedCountries = safeJson<CountryCode[]>(
-        s.vatRegisteredCountriesJson ?? '["GB"]',
-        ["GB"]
-      );
-      setVatRegisteredCountries(savedCountries);
-
-      const savedRates = safeJson<Record<string, number>>(
-        s.vatRatesByCountryJson ?? "{}",
-        {}
-      );
-      setVatRatesByCountry({ ...DEFAULT_VAT_RATES, ...savedRates });
+      setLastRunByKey(safeJson<Record<string, string>>(s.inventoryLastRunByKeyJson ?? "{}", {}));
+      setLastSuccessByKey(safeJson<Record<string, string>>(s.reportLastSuccessByKeyJson ?? "{}", {}));
     } catch (e: any) {
       setErr(e?.message || String(e));
     } finally {
@@ -166,13 +167,19 @@ export default function Page() {
     setErr(null);
     setOkMsg(null);
     try {
+      const cadencePayload: Record<string, { enabled: boolean; dayMinutes: number; nightMinutes: number }> = {};
+      for (const [k, v] of Object.entries(cadences)) {
+        cadencePayload[k] = {
+          enabled: true,
+          dayMinutes: cadenceToMinutes(v.day),
+          nightMinutes: cadenceToMinutes(v.night),
+        };
+      }
+
       const body = {
         reportDayStartHour: dayStartHour,
         reportDayEndHour: dayEndHour,
-        reportCadenceByReportJson: JSON.stringify(cadences),
-        supplierMapCostsIncludeVat,
-        vatRegisteredCountriesJson: JSON.stringify(vatRegisteredCountries),
-        vatRatesByCountryJson: JSON.stringify(vatRatesByCountry),
+        reportCadenceByReportJson: JSON.stringify(cadencePayload),
       };
 
       const r = await fetch("/api/settings/app", {
@@ -217,14 +224,17 @@ export default function Page() {
     }));
   }
 
+  const statusRows = useMemo(() => {
+    const keys = Array.from(new Set([...Object.keys(lastRunByKey), ...Object.keys(lastSuccessByKey)])).sort();
+    return keys.map((k) => ({ key: k, lastRun: lastRunByKey[k], lastSuccess: lastSuccessByKey[k] }));
+  }, [lastRunByKey, lastSuccessByKey]);
+
   return (
     <div className="space-y-4">
       <div className="flex items-end justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-semibold">Settings • Reporting & VAT</h1>
-          <p className="text-white/60">
-            Configure scheduler cadence and VAT behaviour used by Overview profit calculations.
-          </p>
+          <h1 className="text-2xl font-semibold">Settings • Reporting</h1>
+          <p className="text-white/60">Configure day/night cadence per report. Scheduler tick reads these settings (STK-style).</p>
         </div>
 
         <div className="flex items-center gap-2">
@@ -251,55 +261,40 @@ export default function Page() {
       {okMsg ? <div className="rounded-2xl border border-emerald-500/30 bg-emerald-500/10 p-3 text-sm text-emerald-200">{okMsg}</div> : null}
 
       <div className="rounded-2xl border border-white/10 bg-white/5 p-4 space-y-3">
-        <div className="text-sm font-semibold">VAT settings</div>
-        <div className="text-xs text-white/60">
-          Choose the countries where you are VAT registered and override rates if needed. These settings are used when stripping VAT from SupplierMap costs in Overview.
-        </div>
+        <div className="text-sm font-semibold">Data freshness witness</div>
+        <div className="text-xs text-white/60">Quick check of last scheduler run and last successful report windows.</div>
 
-        <label className="flex items-center gap-2 text-sm text-white/80">
-          <input
-            type="checkbox"
-            checked={supplierMapCostsIncludeVat}
-            onChange={(e) => setSupplierMapCostsIncludeVat(e.target.checked)}
-          />
-          SupplierMap costs include VAT
-        </label>
-
-        <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4">
-          {VAT_COUNTRIES.map((c) => {
-            const selected = vatRegisteredCountries.includes(c.code);
-            return (
-              <div key={c.code} className="rounded-2xl border border-white/10 bg-black/20 p-3 space-y-2">
-                <label className="flex items-center gap-2 text-sm">
-                  <input
-                    type="checkbox"
-                    checked={selected}
-                    onChange={() => toggleVatCountry(c.code)}
-                  />
-                  <span>{c.label}</span>
-                </label>
-
-                <label className="space-y-1 block">
-                  <div className="text-xs text-white/60">VAT rate %</div>
-                  <input
-                    type="number"
-                    step="0.1"
-                    value={vatRatesByCountry[c.code] ?? DEFAULT_VAT_RATES[c.code]}
-                    onChange={(e) => setVatRate(c.code, e.target.value)}
-                    className="w-full rounded-xl border border-white/10 bg-black/30 px-3 py-2 text-sm outline-none"
-                  />
-                </label>
-              </div>
-            );
-          })}
+        <div className="overflow-auto">
+          <table className="w-full text-sm">
+            <thead className="text-white/60">
+              <tr className="border-b border-white/10">
+                <th className="py-2 pr-3 text-left">Key</th>
+                <th className="py-2 pr-3 text-left">Last run</th>
+                <th className="py-2 text-left">Last success</th>
+              </tr>
+            </thead>
+            <tbody>
+              {statusRows.length ? (
+                statusRows.map((r) => (
+                  <tr key={r.key} className="border-b border-white/5">
+                    <td className="py-2 pr-3 font-mono text-xs">{r.key}</td>
+                    <td className="py-2 pr-3">{fmtIso(r.lastRun)}</td>
+                    <td className="py-2">{fmtIso(r.lastSuccess)}</td>
+                  </tr>
+                ))
+              ) : (
+                <tr>
+                  <td colSpan={3} className="py-3 text-white/60">No witness data yet.</td>
+                </tr>
+              )}
+            </tbody>
+          </table>
         </div>
       </div>
 
       <div className="rounded-2xl border border-white/10 bg-white/5 p-4 space-y-3">
         <div className="text-sm font-semibold">Daytime window</div>
-        <div className="text-xs text-white/60">
-          Used to choose whether day cadence or night cadence applies. Hours are Europe/London.
-        </div>
+        <div className="text-xs text-white/60">Used to choose whether day cadence or night cadence applies. Hours are Europe/London.</div>
 
         <div className="flex flex-wrap items-center gap-3">
           <label className="space-y-1">
