@@ -52,6 +52,13 @@ const GET_SNAPSHOT = /* GraphQL */ `
   }
 `;
 
+function baseUrlFromReq(req: Request) {
+  const host = req.headers.get("x-forwarded-host") ?? req.headers.get("host");
+  const proto = req.headers.get("x-forwarded-proto") ?? "http";
+  if (!host) return null;
+  return `${proto}://${host}`;
+}
+
 type Snapshot = {
   marketplaceId: string;
   bucket: string;
@@ -65,6 +72,7 @@ export async function GET(req: Request) {
   try {
     const { searchParams } = new URL(req.url);
     const bucket = String(searchParams.get("bucket") ?? "today").trim();
+    const fresh = String(searchParams.get("fresh") ?? "").trim() === "1";
     if (!bucket) return NextResponse.json({ ok: false, error: "Missing bucket" }, { status: 400 });
 
     const s = await gql<{ getAppSettings: any }>(GET_SETTINGS, { id: "global" });
@@ -72,6 +80,20 @@ export async function GET(req: Request) {
     const uk = String(settings.ukMarketplaceId ?? "").trim();
     const eu = safeJson<string[]>(settings.euMarketplaceIdsJson ?? "[]", []);
     const mids = [uk, ...eu].filter(Boolean);
+
+    if (fresh) {
+      const base = baseUrlFromReq(req);
+      if (base) {
+        await Promise.all(
+          mids.map((mid) =>
+            fetch(`${base}/api/sales/build-snapshot?mid=${encodeURIComponent(mid)}`, {
+              method: "POST",
+              cache: "no-store",
+            }).catch(() => null)
+          )
+        );
+      }
+    }
 
     const allRows: any[] = [];
 
