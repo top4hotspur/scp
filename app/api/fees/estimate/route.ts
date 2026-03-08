@@ -103,7 +103,7 @@ async function findLineId(mid: string, u: FeeUpdate): Promise<string | null> {
 
   let nextToken: string | null = null;
   do {
-    const data = await gql<ListSalesLinesResp>(LIST_SALESLINES_LITE, {
+    const data: ListSalesLinesResp = await gql<ListSalesLinesResp>(LIST_SALESLINES_LITE, {
       filter: {
         marketplaceId: { eq: mid },
         orderId: { eq: u.orderId },
