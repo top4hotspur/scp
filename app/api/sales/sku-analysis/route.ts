@@ -123,10 +123,8 @@ export async function GET(req: Request) {
           safeNum(x.prepCost) +
           safeNum(x.feeEstimateTotal);
 
-        const profit =
-          Number.isFinite(Number(x.profitExVat)) && x.profitExVat != null
-            ? Number(x.profitExVat)
-            : revenueExVat - costs;
+        // Always recompute from current inputs so fee updates are reflected immediately.
+        const profit = revenueExVat - costs;
 
         // For chart we want a Ã¢â‚¬Å“sale priceÃ¢â‚¬Â proxy:
         // If itemPrice exists, use that; else use revenueExVat.
