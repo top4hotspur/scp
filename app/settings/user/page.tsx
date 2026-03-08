@@ -1,4 +1,3 @@
-//app/settings/user/page.tsx
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
@@ -106,7 +105,6 @@ export default function Page() {
   const [err, setErr] = useState<string | null>(null);
   const [okMsg, setOkMsg] = useState<string | null>(null);
 
-  // day/night window
   const [dayStartHour, setDayStartHour] = useState(7);
   const [dayEndHour, setDayEndHour] = useState(22);
 
@@ -205,7 +203,24 @@ export default function Page() {
   function setReportCadence(reportKey: string, which: "day" | "night", value: CadenceKey) {
     setCadences((prev) => ({
       ...prev,
-      [reportKey]: { day: prev?.[reportKey]?.day ?? "Daily", night: prev?.[reportKey]?.night ?? "Daily", [which]: value },
+      [reportKey]: {
+        day: prev?.[reportKey]?.day ?? "Daily",
+        night: prev?.[reportKey]?.night ?? "Daily",
+        [which]: value,
+      },
+    }));
+  }
+
+  function toggleVatCountry(code: CountryCode) {
+    setVatRegisteredCountries((prev) =>
+      prev.includes(code) ? prev.filter((x) => x !== code) : [...prev, code]
+    );
+  }
+
+  function setVatRate(code: CountryCode, value: string) {
+    setVatRatesByCountry((prev) => ({
+      ...prev,
+      [code]: toPctNumber(value, prev[code] ?? DEFAULT_VAT_RATES[code]),
     }));
   }
 
