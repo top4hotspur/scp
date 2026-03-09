@@ -108,6 +108,12 @@ function nowIso() {
   return new Date().toISOString();
 }
 
+function parseWaitSeconds(v: string | null, def = 20) {
+  const n = Number(v);
+  if (!Number.isFinite(n)) return def;
+  return Math.max(2, Math.min(120, Math.floor(n)));
+}
+
 function normSku(x: any): string {
   // Normalize across ALL sources (SP-API report text + CSV uploads + GraphQL)
   return String(x ?? "")
@@ -231,6 +237,7 @@ export async function POST(req: Request) {
   try {
     const url = new URL(req.url);
     const mid = String(url.searchParams.get("mid") ?? "").trim();
+    const waitSeconds = parseWaitSeconds(url.searchParams.get("waitSeconds"), 20);
     if (!mid) return NextResponse.json({ ok: false, error: "Missing mid" }, { status: 400 });
 
     // 1) Create report
@@ -243,9 +250,10 @@ export async function POST(req: Request) {
     const reportId = String(created?.reportId ?? "");
     if (!reportId) throw new Error("Missing reportId from create report");
 
-    // 2) Poll until DONE (simple poll; you can add backoff later)
+    // 2) Poll until DONE within wait budget (avoid long request timeouts on hosting)
     let report: any = null;
-    for (let i = 0; i < 30; i++) {
+    const startedAt = Date.now();
+    while (Date.now() - startedAt < waitSeconds * 1000) {
       report = (await spapiFetch({
         method: "GET",
         path: `/reports/2021-06-30/reports/${encodeURIComponent(reportId)}`,
@@ -256,7 +264,17 @@ export async function POST(req: Request) {
       if (status === "CANCELLED" || status === "FATAL") throw new Error(`Report failed: ${status}`);
       await new Promise((r) => setTimeout(r, 2000));
     }
-    if (String(report?.processingStatus ?? "") !== "DONE") throw new Error("Report did not reach DONE in time");
+
+    const finalStatus = String(report?.processingStatus ?? "IN_PROGRESS");
+    if (finalStatus !== "DONE") {
+      return NextResponse.json({
+        ok: true,
+        mid,
+        status: finalStatus,
+        reportId,
+        note: "Listings report queued/in-progress. Re-run this endpoint in ~1-2 minutes to complete ingest.",
+      });
+    }
 
     const reportDocumentId = String(report?.reportDocumentId ?? "");
     if (!reportDocumentId) throw new Error("Missing reportDocumentId");
