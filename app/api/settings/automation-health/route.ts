@@ -132,7 +132,12 @@ export async function GET() {
           marketplaceName,
           lastAutomationAt: runMap[`LISTINGS:${mid}`] ?? runMap["CLEAN:ALL_LISTINGS:UK"] ?? null,
           lastSnapshotAt: cleanSnap?.getCleanListingSnapshot?.createdAtIso ?? null,
-          lastSuccessAt: runMap[`LISTINGS:${mid}`] ?? runMap["CLEAN:ALL_LISTINGS:UK"] ?? null,
+          lastSuccessAt:
+            runMap[`LISTINGS:${mid}`] ??
+            successMap[`LISTINGS:${mid}`] ??
+            successMap[`LISTINGS_REPORT:${mid}`] ??
+            runMap["CLEAN:ALL_LISTINGS:UK"] ??
+            null,
           awsCostPerRunGbp: "~£0.01",
           note: "Per marketplace (reportType GET_MERCHANT_LISTINGS_ALL_DATA)",
         },

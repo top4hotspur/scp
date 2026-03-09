@@ -29,6 +29,7 @@ const GET_SETTINGS = /* GraphQL */ `
       id
       reportPendingByKeyJson
       reportLastSuccessByKeyJson
+      inventoryLastRunByKeyJson
     }
   }
 `;
@@ -39,6 +40,7 @@ const PUT_SETTINGS = /* GraphQL */ `
       id
       reportPendingByKeyJson
       reportLastSuccessByKeyJson
+      inventoryLastRunByKeyJson
     }
   }
 `;
@@ -275,8 +277,12 @@ export async function POST(req: Request) {
     const settings = await gql<{ getAppSettings?: any }>(GET_SETTINGS, { id: "global" }).catch(() => ({ getAppSettings: null }));
     const pending = safeJson<Record<string, any>>(settings?.getAppSettings?.reportPendingByKeyJson ?? "{}", {});
     const lastSuccess = safeJson<Record<string, string>>(settings?.getAppSettings?.reportLastSuccessByKeyJson ?? "{}", {});
+    const runMap = safeJson<Record<string, string>>(settings?.getAppSettings?.inventoryLastRunByKeyJson ?? "{}", {});
 
     const pendingKey = `LISTINGS_REPORT:${mid}`;
+    const runKey = `LISTINGS:${mid}`;
+    const now = nowIso();
+    runMap[runKey] = now;
     const pendingInfo = pending?.[pendingKey] ?? null;
     let reportId = String(pendingInfo?.reportId ?? "").trim();
 
@@ -292,7 +298,13 @@ export async function POST(req: Request) {
       if (!reportId) throw new Error("Missing reportId from create report");
 
       pending[pendingKey] = { reportId, reportType: REPORT_TYPE, createdAtIso: nowIso(), nextRow: 0 };
-      await gql(PUT_SETTINGS, { input: { id: "global", reportPendingByKeyJson: JSON.stringify(pending) } }).catch(() => null);
+      await gql(PUT_SETTINGS, {
+        input: {
+          id: "global",
+          reportPendingByKeyJson: JSON.stringify(pending),
+          inventoryLastRunByKeyJson: JSON.stringify(runMap),
+        },
+      }).catch(() => null);
     }
 
     // 2) Poll until DONE within wait budget (avoid long request timeouts on hosting)
@@ -308,7 +320,13 @@ export async function POST(req: Request) {
       if (status === "DONE") break;
       if (status === "CANCELLED" || status === "FATAL") {
         delete pending[pendingKey];
-        await gql(PUT_SETTINGS, { input: { id: "global", reportPendingByKeyJson: JSON.stringify(pending) } }).catch(() => null);
+        await gql(PUT_SETTINGS, {
+        input: {
+          id: "global",
+          reportPendingByKeyJson: JSON.stringify(pending),
+          inventoryLastRunByKeyJson: JSON.stringify(runMap),
+        },
+      }).catch(() => null);
         throw new Error(`Report failed: ${status}`);
       }
       await new Promise((r) => setTimeout(r, 2000));
@@ -323,7 +341,13 @@ export async function POST(req: Request) {
         status: finalStatus,
         createdAtIso: String(pending?.[pendingKey]?.createdAtIso ?? nowIso()),
       };
-      await gql(PUT_SETTINGS, { input: { id: "global", reportPendingByKeyJson: JSON.stringify(pending) } }).catch(() => null);
+      await gql(PUT_SETTINGS, {
+        input: {
+          id: "global",
+          reportPendingByKeyJson: JSON.stringify(pending),
+          inventoryLastRunByKeyJson: JSON.stringify(runMap),
+        },
+      }).catch(() => null);
 
       return NextResponse.json({
         ok: true,
@@ -418,7 +442,13 @@ export async function POST(req: Request) {
         totalRows,
         updatedAtIso: nowIso(),
       };
-      await gql(PUT_SETTINGS, { input: { id: "global", reportPendingByKeyJson: JSON.stringify(pending) } }).catch(() => null);
+      await gql(PUT_SETTINGS, {
+        input: {
+          id: "global",
+          reportPendingByKeyJson: JSON.stringify(pending),
+          inventoryLastRunByKeyJson: JSON.stringify(runMap),
+        },
+      }).catch(() => null);
 
       return NextResponse.json({
         ok: true,
@@ -446,21 +476,13 @@ export async function POST(req: Request) {
 
     delete pending[pendingKey];
     lastSuccess[pendingKey] = nowIso();
+    lastSuccess[runKey] = nowIso();
     await gql(PUT_SETTINGS, {
       input: {
         id: "global",
         reportPendingByKeyJson: JSON.stringify(pending),
         reportLastSuccessByKeyJson: JSON.stringify(lastSuccess),
-      },
-    }).catch(() => null);
-
-    delete pending[pendingKey];
-    lastSuccess[pendingKey] = nowIso();
-    await gql(PUT_SETTINGS, {
-      input: {
-        id: "global",
-        reportPendingByKeyJson: JSON.stringify(pending),
-        reportLastSuccessByKeyJson: JSON.stringify(lastSuccess),
+        inventoryLastRunByKeyJson: JSON.stringify(runMap),
       },
     }).catch(() => null);
 
