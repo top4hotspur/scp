@@ -267,6 +267,9 @@ export async function POST(req: Request) {
     const url = new URL(req.url);
     const mid = String(url.searchParams.get("mid") ?? "").trim();
     const waitSeconds = parseWaitSeconds(url.searchParams.get("waitSeconds"), 20);
+    const maxRows = Math.max(50, Math.min(2000, Number(url.searchParams.get("maxRows") ?? 400)));
+    const maxProcessSeconds = Math.max(5, Math.min(60, Number(url.searchParams.get("maxProcessSeconds") ?? 20)));
+
     if (!mid) return NextResponse.json({ ok: false, error: "Missing mid" }, { status: 400 });
 
     const settings = await gql<{ getAppSettings?: any }>(GET_SETTINGS, { id: "global" }).catch(() => ({ getAppSettings: null }));
@@ -274,7 +277,8 @@ export async function POST(req: Request) {
     const lastSuccess = safeJson<Record<string, string>>(settings?.getAppSettings?.reportLastSuccessByKeyJson ?? "{}", {});
 
     const pendingKey = `LISTINGS_REPORT:${mid}`;
-    let reportId = String(pending?.[pendingKey]?.reportId ?? "").trim();
+    const pendingInfo = pending?.[pendingKey] ?? null;
+    let reportId = String(pendingInfo?.reportId ?? "").trim();
 
     // 1) Create report only when we do not already have one pending
     if (!reportId) {
@@ -287,7 +291,7 @@ export async function POST(req: Request) {
       reportId = String(created?.reportId ?? "");
       if (!reportId) throw new Error("Missing reportId from create report");
 
-      pending[pendingKey] = { reportId, reportType: REPORT_TYPE, createdAtIso: nowIso() };
+      pending[pendingKey] = { reportId, reportType: REPORT_TYPE, createdAtIso: nowIso(), nextRow: 0 };
       await gql(PUT_SETTINGS, { input: { id: "global", reportPendingByKeyJson: JSON.stringify(pending) } }).catch(() => null);
     }
 
@@ -302,23 +306,36 @@ export async function POST(req: Request) {
 
       const status = String(report?.processingStatus ?? "");
       if (status === "DONE") break;
-      if (status === "CANCELLED" || status === "FATAL") throw new Error(`Report failed: ${status}`);
+      if (status === "CANCELLED" || status === "FATAL") {
+        delete pending[pendingKey];
+        await gql(PUT_SETTINGS, { input: { id: "global", reportPendingByKeyJson: JSON.stringify(pending) } }).catch(() => null);
+        throw new Error(`Report failed: ${status}`);
+      }
       await new Promise((r) => setTimeout(r, 2000));
     }
 
-    const finalStatus = String(report?.processingStatus ?? "IN_PROGRESS");
+    const finalStatus = String(report?.processingStatus ?? pendingInfo?.status ?? "IN_PROGRESS");
     if (finalStatus !== "DONE") {
+      pending[pendingKey] = {
+        ...(pending[pendingKey] ?? {}),
+        reportId,
+        reportType: REPORT_TYPE,
+        status: finalStatus,
+        createdAtIso: String(pending?.[pendingKey]?.createdAtIso ?? nowIso()),
+      };
+      await gql(PUT_SETTINGS, { input: { id: "global", reportPendingByKeyJson: JSON.stringify(pending) } }).catch(() => null);
+
       return NextResponse.json({
         ok: true,
         mid,
         status: finalStatus,
         reportId,
-        resumedPending: Boolean(pending?.[pendingKey]?.reportId),
+        resumedPending: Boolean(pendingInfo?.reportId),
         note: "Listings report queued/in-progress. Re-run this endpoint in ~1-2 minutes to continue tracking the same report.",
       });
     }
 
-    const reportDocumentId = String(report?.reportDocumentId ?? "");
+    const reportDocumentId = String(report?.reportDocumentId ?? pendingInfo?.reportDocumentId ?? "");
     if (!reportDocumentId) throw new Error("Missing reportDocumentId");
 
     // 3) Get report document
@@ -328,66 +345,114 @@ export async function POST(req: Request) {
     })) as any;
 
     const downloadUrl = String(doc?.url ?? "");
-if (!downloadUrl) throw new Error("Missing document url");
+    if (!downloadUrl) throw new Error("Missing document url");
 
-const compressionAlgorithm = doc?.compressionAlgorithm ?? null;
+    const compressionAlgorithm = doc?.compressionAlgorithm ?? null;
 
-// 4) Download report content
-const text = await fetchDocumentText(downloadUrl, compressionAlgorithm);
-
+    // 4) Download report content
+    const text = await fetchDocumentText(downloadUrl, compressionAlgorithm);
     const parsed = parseTsv(text);
 
     // Overlay set: SKUs currently flagged as STRANDED for this marketplace
-const strandedSkus = await getStrandedSkus(mid);
+    const strandedSkus = await getStrandedSkus(mid);
 
-    // Column names from your sample file:
-    // seller-sku, item-name, asin1, price, quantity, status, fulfillment-channel, etc.
-    const get = (r: Record<string, string>, k: string) => String(r?.[k] ?? "").trim();
-
-    let total = 0;
-    const countsByStatus: Record<string, number> = {};
-
+    // Build full status counts once so snapshot is correct on completion
+    const countsByStatusAll: Record<string, number> = {};
     for (const r of parsed.rows) {
+      const sku = normSku(String(r?.["seller-sku"] ?? "").trim());
+      if (!sku) continue;
+      const rawStatus = String(r?.["status"] ?? "Unknown").trim() || "Unknown";
+      const norm = normBucketFromRow(rawStatus, r);
+      countsByStatusAll[norm.bucket] = (countsByStatusAll[norm.bucket] ?? 0) + 1;
+    }
+
+    const get = (r: Record<string, string>, k: string) => String(r?.[k] ?? "").trim();
+    const totalRows = parsed.rows.length;
+    const startRow = Math.max(0, Math.min(totalRows, Number(pendingInfo?.nextRow ?? 0)));
+    const chunkStarted = Date.now();
+
+    let idx = startRow;
+    let processedThisRun = 0;
+
+    for (; idx < totalRows; idx++) {
+      if (processedThisRun >= maxRows) break;
+      if (Date.now() - chunkStarted >= maxProcessSeconds * 1000) break;
+
+      const r = parsed.rows[idx];
       const sku = normSku(get(r, "seller-sku"));
       if (!sku) continue;
 
       const rawStatus = get(r, "status") || "Unknown";
-let norm = normBucketFromRow(rawStatus, r);
+      const norm = normBucketFromRow(rawStatus, r);
 
-
-// Snapshot counts are by BUCKET (not rawStatus)
-countsByStatus[norm.bucket] = (countsByStatus[norm.bucket] ?? 0) + 1;
-
-      // Upsert row (create -> update fallback handled by Data API via idempotent id)
       await upsertListing({
-  id: `${mid}#${sku}`,
-  marketplaceId: mid,
-  sku,
-  title: get(r, "item-name"),
-  asin: get(r, "asin1"),
-  price: get(r, "price"),
-  quantity: get(r, "quantity"),
-  status: norm.bucket,          // status = bucket label (for filtering / UI)
-rawStatus,                    // keep raw Amazon status
-inactiveReason: norm.reason || null,
-inactiveReasonCode: norm.code || null,
-  fulfillmentChannel: get(r, "fulfillment-channel"),
-  updatedAtIso: nowIso(),
-});
+        id: `${mid}#${sku}`,
+        marketplaceId: mid,
+        sku,
+        title: get(r, "item-name"),
+        asin: get(r, "asin1"),
+        price: get(r, "price"),
+        quantity: get(r, "quantity"),
+        status: norm.bucket,
+        rawStatus,
+        inactiveReason: norm.reason || null,
+        inactiveReasonCode: norm.code || null,
+        fulfillmentChannel: get(r, "fulfillment-channel"),
+        updatedAtIso: nowIso(),
+      });
 
-      total++;
+      processedThisRun++;
     }
 
-    // Snapshot
+    const nextRow = idx;
+    const done = nextRow >= totalRows;
+
+    if (!done) {
+      pending[pendingKey] = {
+        ...(pending[pendingKey] ?? {}),
+        reportId,
+        reportType: REPORT_TYPE,
+        reportDocumentId,
+        status: "PARTIAL",
+        nextRow,
+        totalRows,
+        updatedAtIso: nowIso(),
+      };
+      await gql(PUT_SETTINGS, { input: { id: "global", reportPendingByKeyJson: JSON.stringify(pending) } }).catch(() => null);
+
+      return NextResponse.json({
+        ok: true,
+        mid,
+        status: "PARTIAL",
+        reportId,
+        reportDocumentId,
+        processedThisRun,
+        nextRow,
+        totalRows,
+        remainingRows: Math.max(0, totalRows - nextRow),
+        note: "Listings ingest chunk saved. Re-run to continue from next row.",
+      });
+    }
+
     await upsertSnapshot({
-  id: `${mid}#latest`,
-  marketplaceId: mid,
-  bucket: "latest",
-  createdAtIso: nowIso(),
-  total,
-  countsByStatusJson: JSON.stringify(countsByStatus),
-  overlayCountsJson: JSON.stringify({ STRANDED: strandedSkus.size }),
-});
+      id: `${mid}#latest`,
+      marketplaceId: mid,
+      bucket: "latest",
+      createdAtIso: nowIso(),
+      total: Object.values(countsByStatusAll).reduce((a, b) => a + b, 0),
+      countsByStatusJson: JSON.stringify(countsByStatusAll),
+      overlayCountsJson: JSON.stringify({ STRANDED: strandedSkus.size }),
+    });
+
+    delete pending[pendingKey];
+    lastSuccess[pendingKey] = nowIso();
+    await gql(PUT_SETTINGS, {
+      input: {
+        id: "global",
+        reportPendingByKeyJson: JSON.stringify(pending),
+        reportLastSuccessByKeyJson: JSON.stringify(lastSuccess),
+      },
+    }).catch(() => null);
 
     delete pending[pendingKey];
     lastSuccess[pendingKey] = nowIso();
@@ -400,17 +465,17 @@ inactiveReasonCode: norm.code || null,
     }).catch(() => null);
 
     return NextResponse.json({
-  ok: true,
-  mid,
-  reportId,
-  reportDocumentId,
-  total,
-  countsByStatus,
-  overlays: { STRANDED: strandedSkus.size },
-  pendingCleared: true,
-});
+      ok: true,
+      mid,
+      reportId,
+      reportDocumentId,
+      processedThisRun,
+      totalRows,
+      countsByStatus: countsByStatusAll,
+      overlays: { STRANDED: strandedSkus.size },
+      pendingCleared: true,
+    });
   } catch (e: any) {
     return NextResponse.json({ ok: false, error: String(e?.message ?? e) }, { status: 500 });
   }
 }
-
