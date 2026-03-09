@@ -475,9 +475,9 @@ setLookups({
     <div className="space-y-4">
       <div className="flex items-start justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-semibold">Repricer Ã¢â‚¬Â¢ Strategy Mapper</h1>
+          <h1 className="text-2xl font-semibold">Repricer • Strategy Mapper</h1>
           <p className="text-white/60">
-            Map a Strategy to SKUs, Suppliers, or Product Groups (1Ã¢â‚¬â€œ5). Supports per-market overrides + automation triggers.
+            Map a Strategy to SKUs, Suppliers, or Product Groups (1–5). Supports per-market overrides + automation triggers.
           </p>
           {cadenceText ? (
   <div className="mt-2 inline-flex rounded-xl border border-white/10 bg-black/20 px-3 py-1 text-xs text-white/70">
