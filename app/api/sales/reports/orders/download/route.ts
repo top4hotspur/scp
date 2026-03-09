@@ -223,6 +223,37 @@ function londonDayStartIso(now = new Date()): string {
   return t.toISOString();
 }
 
+const MARKETPLACE_BY_DOMAIN: Record<string, string> = {
+  "amazon.co.uk": "A1F83G8C2ARO7P",
+  "amazon.de": "A1PA6795UKMFR9",
+  "amazon.fr": "A13V1IB3VIYZZH",
+  "amazon.it": "APJ6JRA9NG5V4",
+  "amazon.es": "A1RKKUPIHCS9HS",
+  "amazon.nl": "A1805IZSGTT6HS",
+  "amazon.se": "A2NODRKZP88ZB9",
+  "amazon.pl": "A1C3SOZRARQ6R3",
+  "amazon.com.be": "AMEN7PMS3EDWL",
+  "amazon.ie": "A28R8C7NBKEWEA",
+};
+
+function inferMarketplaceId(defaultMid: string, r: Record<string, string>): string {
+  const channelRaw =
+    r["sales-channel"] ||
+    r["sales channel"] ||
+    r["sales_channel"] ||
+    r["saleschannel"] ||
+    "";
+
+  const channel = String(channelRaw).trim().toLowerCase();
+  if (!channel) return defaultMid;
+
+  for (const [domain, mid] of Object.entries(MARKETPLACE_BY_DOMAIN)) {
+    if (channel.includes(domain)) return mid;
+  }
+
+  return defaultMid;
+}
+
 // Map TSV row -> SalesLine input (unshipped: shippedAtIso stays null)
 function toSalesLineInput(mid: string, r: Record<string, string>) {
   const orderId = r["amazon-order-id"] || r["Amazon Order Id"] || r["amazon order id"] || "";
@@ -256,7 +287,7 @@ function toSalesLineInput(mid: string, r: Record<string, string>) {
   const title = r["product-name"] || r["Product Name"] || r["title"] || r["Title"] || null;
 
   return {
-    marketplaceId: mid,
+    marketplaceId: inferMarketplaceId(mid, r),
     orderId: String(orderId).trim(),
     sku: String(sku).trim(),
     qty: Math.max(1, Math.trunc(Number(qty) || 1)),

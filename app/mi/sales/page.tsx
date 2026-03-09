@@ -15,11 +15,19 @@ import {
 } from "recharts";
 
 type Period = "today" | "yesterday" | "7d" | "30d";
+type ReportView = "sales" | "topSellers" | "salesPriceAnalysis";
+
 const PERIODS: { key: Period; label: string }[] = [
   { key: "today", label: "Today" },
   { key: "yesterday", label: "Yesterday" },
   { key: "7d", label: "7 days" },
   { key: "30d", label: "30 days" },
+];
+
+const REPORT_OPTIONS: { key: ReportView; label: string }[] = [
+  { key: "sales", label: "Sales" },
+  { key: "topSellers", label: "Top Sellers" },
+  { key: "salesPriceAnalysis", label: "Sales Price Analysis" },
 ];
 
 type SettingsResp = { ok: boolean; settings?: any; error?: string };
@@ -48,8 +56,23 @@ const MARKET_LABELS: Record<string, string> = {
   A28R8C7NBKEWEA: "Ireland (IE)",
 };
 
+const FX_TO_GBP: Record<string, number> = {
+  GBP: 1,
+  EUR: 0.86,
+  SEK: 0.074,
+  PLN: 0.20,
+};
+
 function labelForMid(mid: string): string {
   return MARKET_LABELS[mid] || mid;
+}
+
+function toGbp(v: any, currency: any): number | null {
+  const n = Number(v);
+  if (!Number.isFinite(n)) return null;
+  const code = String(currency ?? "GBP").trim().toUpperCase();
+  const fx = FX_TO_GBP[code] ?? 1;
+  return n * fx;
 }
 
 function fmtMoney(v: any): string {
@@ -69,7 +92,6 @@ function fmtDt(iso: any): string {
   if (!s) return "—";
   const d = new Date(s);
   if (Number.isNaN(d.getTime())) return s;
-  // dd/mm/yyyy hh:mm
   const dd = String(d.getDate()).padStart(2, "0");
   const mm = String(d.getMonth() + 1).padStart(2, "0");
   const yyyy = String(d.getFullYear());
@@ -84,35 +106,30 @@ function RedX() {
 
 export default function Page() {
   const [period, setPeriod] = useState<Period>("today");
+  const [reportView, setReportView] = useState<ReportView>("sales");
 
-  // marketplaces
   const [marketOptions, setMarketOptions] = useState<MarketplaceOption[]>([
     { value: "COMBINED", label: "Combined", isCombined: true },
   ]);
   const [market, setMarket] = useState<string>("COMBINED");
 
-  // snapshot data
   const [loading, setLoading] = useState(false);
   const [rows, setRows] = useState<any[]>([]);
   const [topSellers, setTopSellers] = useState<any[]>([]);
   const [err, setErr] = useState<string | null>(null);
-  
 
-  // collapsible sections
   const [openSales, setOpenSales] = useState(true);
   const [openTop, setOpenTop] = useState(true);
   const [openSku, setOpenSku] = useState(true);
 
-  // SKU analysis
   const [sku, setSku] = useState("");
   const [skuDaysPreset, setSkuDaysPreset] = useState<"30" | "60" | "90" | "custom">("30");
-  const [skuFrom, setSkuFrom] = useState(""); // YYYY-MM-DD
-  const [skuTo, setSkuTo] = useState(""); // YYYY-MM-DD
+  const [skuFrom, setSkuFrom] = useState("");
+  const [skuTo, setSkuTo] = useState("");
   const [skuLoading, setSkuLoading] = useState(false);
   const [skuErr, setSkuErr] = useState<string | null>(null);
   const [skuSeries, setSkuSeries] = useState<any[]>([]);
 
-  // load settings to build dropdown
   useEffect(() => {
     (async () => {
       try {
@@ -154,7 +171,6 @@ export default function Page() {
 
       setRows(Array.isArray(json.rows) ? json.rows : []);
       setTopSellers(Array.isArray(json.topSellers) ? json.topSellers : []);
-      
     } catch (e: any) {
       setErr(e?.message || String(e));
       setRows([]);
@@ -211,7 +227,6 @@ export default function Page() {
 
   return (
     <div className="space-y-4">
-      {/* Header */}
       <div className="flex items-end justify-between gap-3">
         <div>
           <h1 className="text-2xl font-semibold">MI • Sales</h1>
@@ -228,7 +243,6 @@ export default function Page() {
         </button>
       </div>
 
-      {/* Controls */}
       <div className="flex flex-wrap items-center gap-2 rounded-2xl border border-white/10 bg-white/5 p-3">
         <div className="flex items-center gap-2">
           <span className="text-xs text-white/60">Marketplace</span>
@@ -239,6 +253,21 @@ export default function Page() {
           >
             {marketOptions.map((o) => (
               <option key={o.value} value={o.value}>
+                {o.label}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        <div className="flex items-center gap-2">
+          <span className="text-xs text-white/60">Report</span>
+          <select
+            value={reportView}
+            onChange={(e) => setReportView(e.target.value as ReportView)}
+            className="min-w-[220px] rounded-xl border border-white/10 bg-black/30 px-3 py-2 text-sm outline-none"
+          >
+            {REPORT_OPTIONS.map((o) => (
+              <option key={o.key} value={o.key}>
                 {o.label}
               </option>
             ))}
@@ -264,212 +293,220 @@ export default function Page() {
         <div className="rounded-2xl border border-red-500/30 bg-red-500/10 p-3 text-sm text-red-200">{err}</div>
       ) : null}
 
-      {/* Sales table */}
-      <Section
-        title="Sales"
-        open={openSales}
-        onToggle={() => setOpenSales((v) => !v)}
-        subtitle="Image/title/ROI/margin are derived from snapshot rows. Stock remaining will be wired next."
-      >
-        <div className="overflow-auto">
-          <table className="w-full text-sm">
-            <thead className="text-white/60">
-              <tr className="border-b border-white/10">
-                <th className="py-2 pr-3 text-left">Image</th>
-                <th className="py-2 pr-3 text-left">Title</th>
-                <th className="py-2 pr-3 text-left">Marketplace</th>
-                <th className="py-2 pr-3 text-right">Qty</th>
-                <th className="py-2 pr-3 text-left">Date/Time</th>
-                <th className="py-2 pr-3 text-right">Price</th>
-                <th className="py-2 pr-3 text-right">Profit</th>
-                <th className="py-2 pr-3 text-right">ROI</th>
-                <th className="py-2 pr-3 text-right">Margin</th>
-                <th className="py-2 text-right">Stock</th>
-              </tr>
-            </thead>
-            <tbody>
-              {rows.length ? (
-                rows.map((r, idx) => {
-                  const title = r.shortTitle || r.listingTitle || r.sku || "—";
-                  const mid = String(r.marketplaceId ?? "");
-                  const dt = r.shippedAtIso || r.purchaseAtIso || null;
-
-                  const missing = Boolean(r.missingCostFields);
-                  const price = fmtMoney(r.revenueExVat ?? r.price ?? r.itemPrice);
-                  const profit = missing ? null : fmtMoney(r.profitExVat);
-                  const roi = missing ? null : fmtPct(r.roiPct);
-                  const margin = missing ? null : fmtPct(r.marginPct);
-
-                  return (
-                    <tr key={`${r.sku ?? idx}-${idx}`} className="border-b border-white/5">
-                      <td className="py-2 pr-3">
-                        {r.imageUrl ? (
-                          <img
-                            src={r.imageUrl}
-                            alt=""
-                            className="h-10 w-10 rounded-lg object-cover border border-white/10"
-                            loading="lazy"
-                          />
-                        ) : (
-                          <div className="h-10 w-10 rounded-lg border border-white/10 bg-white/5" />
-                        )}
-                      </td>
-                      <td className="py-2 pr-3">
-                        <div className="font-medium">{title}</div>
-                        <div className="text-xs text-white/60">{r.sku}</div>
-                      </td>
-                      <td className="py-2 pr-3">{labelForMid(mid)}</td>
-                      <td className="py-2 pr-3 text-right">{r.qty ?? "—"}</td>
-                      <td className="py-2 pr-3">{fmtDt(dt)}</td>
-                      <td className="py-2 pr-3 text-right">{price}</td>
-                      <td className="py-2 pr-3 text-right">{missing ? <RedX /> : profit}</td>
-                      <td className="py-2 pr-3 text-right">{missing ? <RedX /> : roi}</td>
-                      <td className="py-2 pr-3 text-right">{missing ? <RedX /> : margin}</td>
-                      <td className="py-2 text-right">
-  {Number.isFinite(Number(r.stockAvailable)) ? Number(r.stockAvailable) : <span className="text-white/60">—</span>}
-</td>
-                    </tr>
-                  );
-                })
-              ) : (
-                <tr>
-                  <td colSpan={10} className="py-6 text-center text-white/60">
-                    No rows yet.
-                  </td>
+      {reportView === "sales" ? (
+        <Section
+          title="Sales"
+          open={openSales}
+          onToggle={() => setOpenSales((v) => !v)}
+          subtitle="Marketplace attribution comes from each order row. Values are shown in GBP (EU currencies converted for display)."
+        >
+          <div className="overflow-auto">
+            <table className="w-full text-sm">
+              <thead className="text-white/60">
+                <tr className="border-b border-white/10">
+                  <th className="py-2 pr-3 text-left">Image</th>
+                  <th className="py-2 pr-3 text-left">Title</th>
+                  <th className="py-2 pr-3 text-left">Marketplace</th>
+                  <th className="py-2 pr-3 text-right">Qty</th>
+                  <th className="py-2 pr-3 text-left">Date/Time</th>
+                  <th className="py-2 pr-3 text-right">Price (£)</th>
+                  <th className="py-2 pr-3 text-right">Profit (£)</th>
+                  <th className="py-2 pr-3 text-right">ROI</th>
+                  <th className="py-2 pr-3 text-right">Margin</th>
+                  <th className="py-2 text-right">Stock</th>
                 </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
-      </Section>
+              </thead>
+              <tbody>
+                {rows.length ? (
+                  rows.map((r, idx) => {
+                    const title = r.shortTitle || r.listingTitle || r.sku || "—";
+                    const mid = String(r.marketplaceId ?? "");
+                    const dt = r.shippedAtIso || r.purchaseAtIso || null;
+                    const cur = String(r.currency ?? "GBP").trim().toUpperCase();
 
-      {/* Top sellers table */}
-      <Section title="Top 10 sellers" open={openTop} onToggle={() => setOpenTop((v) => !v)}>
-        <div className="overflow-auto">
-          <table className="w-full text-sm">
-            <thead className="text-white/60">
-              <tr className="border-b border-white/10">
-                <th className="py-2 pr-3 text-left">SKU</th>
-                <th className="py-2 pr-3 text-right">Units</th>
-                <th className="py-2 pr-3 text-right">Profit</th>
-                <th className="py-2 text-right">Action</th>
-              </tr>
-            </thead>
-            <tbody>
-              {topSellers.length ? (
-                topSellers.map((t, idx) => (
-                  <tr key={`${t.sku ?? idx}-${idx}`} className="border-b border-white/5">
-                    <td className="py-2 pr-3 font-medium">{t.sku ?? "—"}</td>
-                    <td className="py-2 pr-3 text-right">{t.units ?? "—"}</td>
-                    <td className="py-2 pr-3 text-right">{fmtMoney(t.profit)}</td>
-                    <td className="py-2 text-right">
-                      <button
-                        onClick={() => loadSkuAnalysis(String(t.sku ?? ""))}
-                        className="inline-flex items-center gap-2 rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm hover:bg-white/10"
-                        title="Sales Price Analysis"
-                      >
-                        <LineChart className="h-4 w-4" />
-                        Price Analysis
-                      </button>
+                    const priceGbp = toGbp(r.revenueExVat ?? r.price ?? r.itemPrice, cur);
+                    const profitGbp = toGbp(r.profitExVat, cur);
+                    const roi = Number(r.roiPct);
+                    const margin = Number(r.marginPct);
+
+                    const showProfit = Number.isFinite(profitGbp as number);
+                    const showRoi = Number.isFinite(roi);
+                    const showMargin = Number.isFinite(margin);
+
+                    return (
+                      <tr key={`${r.sku ?? idx}-${idx}`} className="border-b border-white/5">
+                        <td className="py-2 pr-3">
+                          {r.imageUrl ? (
+                            <img
+                              src={r.imageUrl}
+                              alt=""
+                              className="h-10 w-10 rounded-lg object-cover border border-white/10"
+                              loading="lazy"
+                            />
+                          ) : (
+                            <div className="h-10 w-10 rounded-lg border border-white/10 bg-white/5" />
+                          )}
+                        </td>
+                        <td className="py-2 pr-3">
+                          <div className="font-medium">{title}</div>
+                          <div className="text-xs text-white/60">{r.sku}</div>
+                        </td>
+                        <td className="py-2 pr-3">{labelForMid(mid)}</td>
+                        <td className="py-2 pr-3 text-right">{r.qty ?? "—"}</td>
+                        <td className="py-2 pr-3">{fmtDt(dt)}</td>
+                        <td className="py-2 pr-3 text-right">{fmtMoney(priceGbp)}</td>
+                        <td className="py-2 pr-3 text-right">{showProfit ? fmtMoney(profitGbp) : <RedX />}</td>
+                        <td className="py-2 pr-3 text-right">{showRoi ? fmtPct(roi) : <RedX />}</td>
+                        <td className="py-2 pr-3 text-right">{showMargin ? fmtPct(margin) : <RedX />}</td>
+                        <td className="py-2 text-right">
+                          {Number.isFinite(Number(r.stockAvailable)) ? Number(r.stockAvailable) : <span className="text-white/60">—</span>}
+                        </td>
+                      </tr>
+                    );
+                  })
+                ) : (
+                  <tr>
+                    <td colSpan={10} className="py-6 text-center text-white/60">
+                      No rows yet.
                     </td>
                   </tr>
-                ))
-              ) : (
-                <tr>
-                  <td colSpan={4} className="py-6 text-center text-white/60">
-                    No rows yet.
-                  </td>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </Section>
+      ) : null}
+
+      {reportView === "topSellers" ? (
+        <Section title="Top Sellers" open={openTop} onToggle={() => setOpenTop((v) => !v)}>
+          <div className="overflow-auto">
+            <table className="w-full text-sm">
+              <thead className="text-white/60">
+                <tr className="border-b border-white/10">
+                  <th className="py-2 pr-3 text-left">SKU</th>
+                  <th className="py-2 pr-3 text-right">Units</th>
+                  <th className="py-2 pr-3 text-right">Profit (£)</th>
+                  <th className="py-2 text-right">Action</th>
                 </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
-      </Section>
+              </thead>
+              <tbody>
+                {topSellers.length ? (
+                  topSellers.map((t, idx) => (
+                    <tr key={`${t.sku ?? idx}-${idx}`} className="border-b border-white/5">
+                      <td className="py-2 pr-3 font-medium">{t.sku ?? "—"}</td>
+                      <td className="py-2 pr-3 text-right">{t.units ?? "—"}</td>
+                      <td className="py-2 pr-3 text-right">{fmtMoney(t.profit)}</td>
+                      <td className="py-2 text-right">
+                        <button
+                          onClick={() => {
+                            setReportView("salesPriceAnalysis");
+                            loadSkuAnalysis(String(t.sku ?? ""));
+                          }}
+                          className="inline-flex items-center gap-2 rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm hover:bg-white/10"
+                          title="Sales Price Analysis"
+                        >
+                          <LineChart className="h-4 w-4" />
+                          Sales Price Analysis
+                        </button>
+                      </td>
+                    </tr>
+                  ))
+                ) : (
+                  <tr>
+                    <td colSpan={4} className="py-6 text-center text-white/60">
+                      No rows yet.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </Section>
+      ) : null}
 
-      {/* SKU analysis */}
-      <Section
-        title="SKU Price & Profit analysis"
-        open={openSku}
-        onToggle={() => setOpenSku((v) => !v)}
-        subtitle="Marketplace-only. Uses stored SalesLine. Combined is disabled for this."
-      >
-        <div className="flex flex-wrap items-end gap-2">
-          <label className="space-y-1">
-            <div className="text-xs text-white/60">SKU</div>
-            <input
-              value={sku}
-              onChange={(e) => setSku(e.target.value)}
-              placeholder="e.g. LP42495"
-              className="w-[240px] rounded-xl border border-white/10 bg-black/30 px-3 py-2 text-sm outline-none"
-            />
-          </label>
+      {reportView === "salesPriceAnalysis" ? (
+        <Section
+          title="Sales Price Analysis"
+          open={openSku}
+          onToggle={() => setOpenSku((v) => !v)}
+          subtitle="Marketplace-only. Uses stored SalesLine. Combined is disabled for this."
+        >
+          <div className="flex flex-wrap items-end gap-2">
+            <label className="space-y-1">
+              <div className="text-xs text-white/60">SKU</div>
+              <input
+                value={sku}
+                onChange={(e) => setSku(e.target.value)}
+                placeholder="e.g. LP42495"
+                className="w-[240px] rounded-xl border border-white/10 bg-black/30 px-3 py-2 text-sm outline-none"
+              />
+            </label>
 
-          <div className="flex items-center gap-2">
-            <PresetButton label="30d" active={skuDaysPreset === "30"} onClick={() => setSkuDaysPreset("30")} />
-            <PresetButton label="60d" active={skuDaysPreset === "60"} onClick={() => setSkuDaysPreset("60")} />
-            <PresetButton label="90d" active={skuDaysPreset === "90"} onClick={() => setSkuDaysPreset("90")} />
-            <PresetButton label="Custom" active={skuDaysPreset === "custom"} onClick={() => setSkuDaysPreset("custom")} />
+            <div className="flex items-center gap-2">
+              <PresetButton label="30d" active={skuDaysPreset === "30"} onClick={() => setSkuDaysPreset("30")} />
+              <PresetButton label="60d" active={skuDaysPreset === "60"} onClick={() => setSkuDaysPreset("60")} />
+              <PresetButton label="90d" active={skuDaysPreset === "90"} onClick={() => setSkuDaysPreset("90")} />
+              <PresetButton label="Custom" active={skuDaysPreset === "custom"} onClick={() => setSkuDaysPreset("custom")} />
+            </div>
+
+            {skuDaysPreset === "custom" ? (
+              <div className="flex flex-wrap items-end gap-2">
+                <label className="space-y-1">
+                  <div className="text-xs text-white/60">From</div>
+                  <input
+                    type="date"
+                    value={skuFrom}
+                    onChange={(e) => setSkuFrom(e.target.value)}
+                    className="rounded-xl border border-white/10 bg-black/30 px-3 py-2 text-sm outline-none"
+                  />
+                </label>
+                <label className="space-y-1">
+                  <div className="text-xs text-white/60">To</div>
+                  <input
+                    type="date"
+                    value={skuTo}
+                    onChange={(e) => setSkuTo(e.target.value)}
+                    className="rounded-xl border border-white/10 bg-black/30 px-3 py-2 text-sm outline-none"
+                  />
+                </label>
+              </div>
+            ) : null}
+
+            <button
+              onClick={() => loadSkuAnalysis()}
+              disabled={skuLoading}
+              className="ml-auto inline-flex items-center gap-2 rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm hover:bg-white/10 disabled:opacity-50"
+            >
+              <Search className={skuLoading ? "h-4 w-4 animate-spin" : "h-4 w-4"} />
+              Run
+            </button>
           </div>
 
-          {skuDaysPreset === "custom" ? (
-            <div className="flex flex-wrap items-end gap-2">
-              <label className="space-y-1">
-                <div className="text-xs text-white/60">From</div>
-                <input
-                  type="date"
-                  value={skuFrom}
-                  onChange={(e) => setSkuFrom(e.target.value)}
-                  className="rounded-xl border border-white/10 bg-black/30 px-3 py-2 text-sm outline-none"
-                />
-              </label>
-              <label className="space-y-1">
-                <div className="text-xs text-white/60">To</div>
-                <input
-                  type="date"
-                  value={skuTo}
-                  onChange={(e) => setSkuTo(e.target.value)}
-                  className="rounded-xl border border-white/10 bg-black/30 px-3 py-2 text-sm outline-none"
-                />
-              </label>
-            </div>
+          {skuErr ? (
+            <div className="mt-3 rounded-2xl border border-red-500/30 bg-red-500/10 p-3 text-sm text-red-200">{skuErr}</div>
           ) : null}
 
-          <button
-            onClick={() => loadSkuAnalysis()}
-            disabled={skuLoading}
-            className="ml-auto inline-flex items-center gap-2 rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm hover:bg-white/10 disabled:opacity-50"
-          >
-            <Search className={skuLoading ? "h-4 w-4 animate-spin" : "h-4 w-4"} />
-            Run
-          </button>
-        </div>
+          <div className="mt-4 h-[320px] rounded-2xl border border-white/10 bg-black/20 p-3">
+            <div className="text-xs text-white/60 mb-2">Chart: Sale price + profit per line. Each bar is one sale line.</div>
 
-        {skuErr ? (
-          <div className="mt-3 rounded-2xl border border-red-500/30 bg-red-500/10 p-3 text-sm text-red-200">{skuErr}</div>
-        ) : null}
-
-        <div className="mt-4 h-[320px] rounded-2xl border border-white/10 bg-black/20 p-3">
-          <div className="text-xs text-white/60 mb-2">
-            Chart: Sale price + profit per line. Each bar is one sale line.
+            {skuSeries.length ? (
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={skuSeries}>
+                  <CartesianGrid strokeDasharray="3 3" />
+                  <XAxis dataKey="date" tick={{ fontSize: 12 }} />
+                  <YAxis tick={{ fontSize: 12 }} />
+                  <Tooltip />
+                  <Legend />
+                  <Bar dataKey="price" stackId="a" name="Price" />
+                  <Bar dataKey="profit" stackId="a" name="Profit" />
+                </BarChart>
+              </ResponsiveContainer>
+            ) : (
+              <div className="text-sm text-white/60">No data yet.</div>
+            )}
           </div>
-
-          {skuSeries.length ? (
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={skuSeries}>
-                <CartesianGrid strokeDasharray="3 3" />
-                <XAxis dataKey="date" tick={{ fontSize: 12 }} />
-                <YAxis tick={{ fontSize: 12 }} />
-                <Tooltip />
-                <Legend />
-                <Bar dataKey="price" stackId="a" name="Price" />
-                <Bar dataKey="profit" stackId="a" name="Profit" />
-              </BarChart>
-            </ResponsiveContainer>
-          ) : (
-            <div className="text-sm text-white/60">No data yet.</div>
-          )}
-        </div>
-      </Section>
+        </Section>
+      ) : null}
     </div>
   );
 }
