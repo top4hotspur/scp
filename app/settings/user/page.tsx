@@ -42,9 +42,14 @@ const CADENCE_OPTIONS: { key: CadenceKey; label: string; minutes: number }[] = [
   { key: "Monthly", label: "Monthly", minutes: 43200 },
 ];
 
-type ReportKey = "sales.orders" | "sales.snapshot" | "sales.cancellations" | "fee.estimate";
+type ReportKey = "listings.snapshot" | "sales.orders" | "sales.snapshot" | "sales.cancellations" | "fee.estimate";
 
 const REPORTS: { key: ReportKey; title: string; desc: string }[] = [
+  {
+    key: "listings.snapshot",
+    title: "Listings — Build snapshot",
+    desc: "Refresh listing truth/snapshot from Amazon listings report. Snapshot drives Listings MI accuracy.",
+  },
   {
     key: "sales.orders",
     title: "Sales — Orders report",
@@ -122,6 +127,7 @@ export default function Page() {
 
   // report cadence
   const [cadences, setCadences] = useState<UiCadence>({
+    "listings.snapshot": { day: "6hr", night: "Daily" },
     "sales.orders": { day: "15m", night: "1hr" },
     "sales.snapshot": { day: "15m", night: "1hr" },
     "sales.cancellations": { day: "Daily", night: "Daily" },

@@ -100,9 +100,9 @@ export async function GET() {
     const rows: HealthRow[] = [
       {
         system: "Listings",
-        lastAutomationAt: runMap["CLEAN:ALL_LISTINGS:UK"] ?? null,
+        lastAutomationAt: runMap[`LISTINGS:${ukMid}`] ?? runMap["CLEAN:ALL_LISTINGS:UK"] ?? null,
         lastSnapshotAt: cleanSnap?.getCleanListingSnapshot?.createdAtIso ?? null,
-        lastSuccessAt: runMap["CLEAN:ALL_LISTINGS:UK"] ?? null,
+        lastSuccessAt: runMap[`LISTINGS:${ukMid}`] ?? runMap["CLEAN:ALL_LISTINGS:UK"] ?? null,
         awsCostPerRunGbp: "~£0.01",
         note: "All Listings ingest + clean snapshot",
       },

@@ -77,6 +77,7 @@ function defaultSettings() {
     reportDayStartHour: 7,
     reportDayEndHour: 22,
     reportCadenceByReportJson: JSON.stringify({
+      "listings.snapshot": { enabled: true, dayMinutes: 360, nightMinutes: 1440 },
       "sales.orders": { enabled: true, dayMinutes: 15, nightMinutes: 60 },
       "sales.snapshot": { enabled: true, dayMinutes: 15, nightMinutes: 60 },
       "sales.cancellations": { enabled: true, dayMinutes: 1440, nightMinutes: 1440 },
