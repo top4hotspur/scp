@@ -8,18 +8,23 @@ import { useDock } from "./DockProvider";
 import SettingsUploads from "@/components/pages/SettingsUploads";
 import SettingsApp from "@/components/pages/SettingsApp";
 
+function normalizeHref(href: string): string {
+  const h = String(href ?? "").trim();
+  if (!h) return "/";
+  return h.startsWith("/") ? h : `/${h}`;
+}
 
 function DocRenderer({ href, children }: { href: string; children?: React.ReactNode }) {
-  const pathname = usePathname();
+  const pathname = normalizeHref(usePathname() || "/");
 
   // If this tab matches the current route, render the real Next.js page content
-  if (href === pathname) {
+  if (normalizeHref(href) === pathname) {
     return <>{children}</>;
   }
 
   // Settings (these are non-page components in your project)
-  if (href === "/settings/uploads") return <SettingsUploads />;
-  if (href === "/settings/app") return <SettingsApp />;
+  if (normalizeHref(href) === "/settings/uploads") return <SettingsUploads />;
+  if (normalizeHref(href) === "/settings/app") return <SettingsApp />;
 
   // Otherwise: route mismatch (tab is not on-screen route yet)
   return (
@@ -30,7 +35,7 @@ function DocRenderer({ href, children }: { href: string; children?: React.ReactN
 }
 function Pane({ target, children }: { target: "left" | "right"; children?: React.ReactNode }) {
   const { state, closeDoc, setActive, openDoc } = useDock();
-  const pathname = usePathname();
+  const pathname = normalizeHref(usePathname() || "/");
   const router = useRouter();
   const pane = target === "left" ? state.left : state.right;
     useEffect(() => {
@@ -70,7 +75,7 @@ function Pane({ target, children }: { target: "left" | "right"; children?: React
                 key={t.id}
                 onClick={() => {
   setActive(t.id, target);
-  router.push(t.href);
+  router.push(normalizeHref(t.href));
 }}
                 className={[
                   "flex items-center gap-2 rounded-xl px-3 py-1.5 text-xs whitespace-nowrap",

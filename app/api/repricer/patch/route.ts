@@ -3,6 +3,7 @@
 
 import { NextResponse } from "next/server";
 import { spapiFetch } from "@/lib/spapi/request";
+import { envOrEmpty } from "@/lib/spapi/env";
 
 export const runtime = "nodejs";
 
@@ -53,7 +54,7 @@ export async function POST(req: Request) {
       return NextResponse.json({ ok: false, error: "Missing/invalid price" }, { status: 400 });
     }
 
-    const sellerId = safeStr(process.env.SPAPI_SELLER_ID);
+    const sellerId = safeStr(envOrEmpty("SPAPI_SELLER_ID"));
     if (!sellerId) {
       return NextResponse.json({ ok: false, error: "Missing env var: SPAPI_SELLER_ID" }, { status: 500 });
     }
