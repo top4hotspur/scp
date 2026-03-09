@@ -5,6 +5,9 @@ import { Save, RefreshCw } from "lucide-react";
 
 type SettingsResp = { ok: boolean; settings?: any; error?: string };
 
+// Backward-compatible alias: older branches referenced CountryCode in VAT helpers.
+type CountryCode = string;
+
 type CadenceKey =
   | "15m"
   | "30m"
@@ -208,19 +211,6 @@ export default function Page() {
         night: prev?.[reportKey]?.night ?? "Daily",
         [which]: value,
       },
-    }));
-  }
-
-  function toggleVatCountry(code: CountryCode) {
-    setVatRegisteredCountries((prev) =>
-      prev.includes(code) ? prev.filter((x) => x !== code) : [...prev, code]
-    );
-  }
-
-  function setVatRate(code: CountryCode, value: string) {
-    setVatRatesByCountry((prev) => ({
-      ...prev,
-      [code]: toPctNumber(value, prev[code] ?? DEFAULT_VAT_RATES[code]),
     }));
   }
 
