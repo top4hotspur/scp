@@ -353,8 +353,8 @@ SalesLine: a
     isCanceled: a.boolean(),
   })
     .authorization((allow) => [
-    // Server routes using DATA_API_KEY need at least READ access
-    allow.publicApiKey().to(["read"]),
+    // Server routes ingest and update SalesLine through API key auth
+    allow.publicApiKey(),
   ])
   .identifier(["marketplaceId", "orderId", "lineId"])
   .secondaryIndexes((idx) => [

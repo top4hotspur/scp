@@ -17,6 +17,7 @@ const GET_SETTINGS = /* GraphQL */ `
       reportPendingByKeyJson
       reportLastSuccessByKeyJson
       reportBackfillDays
+      inventoryLastRunByKeyJson
     }
   }
 `;
@@ -28,6 +29,7 @@ const PUT_SETTINGS = /* GraphQL */ `
       reportPendingByKeyJson
       reportLastSuccessByKeyJson
       reportBackfillDays
+      inventoryLastRunByKeyJson
     }
   }
 `;
@@ -157,6 +159,12 @@ function subtractDaysIso(days: number) {
   return new Date(Date.now() - days * 86400_000).toISOString();
 }
 
+function subtractMinutesIso(iso: string, mins: number) {
+  const t = Date.parse(iso);
+  if (!Number.isFinite(t)) return iso;
+  return new Date(t - mins * 60_000).toISOString();
+}
+
 function numMaybe(s: any): number | null {
   const n = Number(String(s ?? "").trim());
   return Number.isFinite(n) ? n : null;
@@ -277,9 +285,13 @@ export async function POST(req: Request) {
     const settings = s?.getAppSettings ?? {};
     const pending = safeJson<Record<string, any>>(settings.reportPendingByKeyJson ?? "{}", {});
     const lastSuccess = safeJson<Record<string, string>>(settings.reportLastSuccessByKeyJson ?? "{}", {});
+    const runMap = safeJson<Record<string, string>>(settings.inventoryLastRunByKeyJson ?? "{}", {});
     const backfillDays = Number(settings.reportBackfillDays ?? 60) || 60;
 
     const key = `SALES_ORDERS:${mid}`;
+    const runKey = `SALES:${mid}`;
+    const now = nowIso();
+    runMap[runKey] = now;
 
     // If a report is pending, poll it
     if (pending[key]?.reportId) {
@@ -290,13 +302,27 @@ export async function POST(req: Request) {
       const status = String(rep?.processingStatus ?? "");
 
       if (status === "IN_QUEUE" || status === "IN_PROGRESS") {
+        await gql(PUT_SETTINGS, {
+          input: {
+            id: "global",
+            reportPendingByKeyJson: JSON.stringify(pending),
+            inventoryLastRunByKeyJson: JSON.stringify(runMap),
+          },
+        }).catch(() => null);
+
         return NextResponse.json({ ok: true, mid, key, status, reportId });
       }
 
       if (status !== "DONE") {
         // Clear pending on terminal failure
         delete pending[key];
-        await gql(PUT_SETTINGS, { input: { id: "global", reportPendingByKeyJson: JSON.stringify(pending) } });
+        await gql(PUT_SETTINGS, {
+          input: {
+            id: "global",
+            reportPendingByKeyJson: JSON.stringify(pending),
+            inventoryLastRunByKeyJson: JSON.stringify(runMap),
+          },
+        });
         return NextResponse.json(
           { ok: false, mid, key, status, reportId, error: "Report not DONE" },
           { status: 500 }
@@ -320,7 +346,13 @@ export async function POST(req: Request) {
 
         // Clear pending so next call can request again after we adjust
         delete pending[key];
-        await gql(PUT_SETTINGS, { input: { id: "global", reportPendingByKeyJson: JSON.stringify(pending) } });
+        await gql(PUT_SETTINGS, {
+          input: {
+            id: "global",
+            reportPendingByKeyJson: JSON.stringify(pending),
+            inventoryLastRunByKeyJson: JSON.stringify(runMap),
+          },
+        });
 
         return NextResponse.json(
           {
@@ -415,6 +447,7 @@ try {
       // Mark success window and clear pending
       const toIso = String(pendingInfo?.toIso ?? nowIso());
       lastSuccess[key] = toIso;
+      lastSuccess[runKey] = toIso;
 
       delete pending[key];
       await gql(PUT_SETTINGS, {
@@ -422,6 +455,7 @@ try {
           id: "global",
           reportPendingByKeyJson: JSON.stringify(pending),
           reportLastSuccessByKeyJson: JSON.stringify(lastSuccess),
+          inventoryLastRunByKeyJson: JSON.stringify(runMap),
         },
       });
 
@@ -445,15 +479,15 @@ try {
     }
 
     // No pending: request a report window
-    // No pending: request a report window
-const toIso = nowIso();
+    const toIso = nowIso();
 
-// PERMANENT RULE (STK-style):
-// Orders stream is used for "today view" so always pull from midnight UTC.
-// Cheap enough + deterministic.
-const startOfToday = new Date();
-startOfToday.setUTCHours(0, 0, 0, 0);
-const fromIso = startOfToday.toISOString();
+    // Incremental window from last successful ingest with small overlap to avoid misses.
+    const overlapMinutes = 15;
+    const fromIso = (() => {
+      const last = String(lastSuccess[key] ?? "").trim();
+      if (last) return subtractMinutesIso(last, overlapMinutes);
+      return subtractDaysIso(backfillDays);
+    })();
 
     const reportType = "GET_FLAT_FILE_ALL_ORDERS_DATA_BY_LAST_UPDATE_GENERAL";
 
@@ -469,11 +503,16 @@ const fromIso = startOfToday.toISOString();
 
     pending[key] = { reportId, reportType, createdAtIso: nowIso(), fromIso, toIso };
 
-    await gql(PUT_SETTINGS, { input: { id: "global", reportPendingByKeyJson: JSON.stringify(pending) } });
+    await gql(PUT_SETTINGS, {
+      input: {
+        id: "global",
+        reportPendingByKeyJson: JSON.stringify(pending),
+        inventoryLastRunByKeyJson: JSON.stringify(runMap),
+      },
+    });
 
-    return NextResponse.json({ ok: true, mid, key, status: "REQUESTED", reportId, fromIso, toIso, backfillDays });
+    return NextResponse.json({ ok: true, mid, key, status: "REQUESTED", reportId, fromIso, toIso, backfillDays, overlapMinutes });
   } catch (e: any) {
     return NextResponse.json({ ok: false, error: String(e?.message ?? e) }, { status: 500 });
   }
 }
-
