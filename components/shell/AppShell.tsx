@@ -12,7 +12,7 @@ const NAV: NavGroup[] = [
   {
     title: "MI",
     items: [
-      { label: "Overview", href: "mi/overview" },
+      { label: "Overview", href: "/mi/overview" },
       { label: "Sales", href: "/mi/sales" },
       { label: "Restock", href: "/mi/restock" },
       { label: "Clean", href: "/mi/clean" },
@@ -73,7 +73,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     };
   }, []);
 
-  // When route changes, open it as a dock tab (so Dock isnâ€™t empty)
+  // When route changes, open it as a dock tab (so Dock isn't empty)
   useEffect(() => {
     const title = NAV.flatMap((g) => g.items).find((x) => x.href === pathname)?.label ?? pathname;
     openDoc({ title, href: pathname }, "left");
@@ -89,7 +89,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
         <div className="p-4 border-b border-white/10">
           <div className="text-sm font-semibold tracking-wide">SCP</div>
-          <div className="text-xs text-white/60">STK-mode â€¢ cost locked</div>
+          <div className="text-xs text-white/60">STK-mode • cost locked</div>
         </div>
 
         <nav className="p-3 space-y-3">
