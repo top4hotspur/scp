@@ -1,6 +1,7 @@
 // lib/spapi/sigv4.ts
 import crypto from "node:crypto";
-import { envOrEmpty, needEnv } from "./env";
+import { envOrEmpty } from "./env";
+import { resolveSpApiAwsCreds } from "./awsCreds";
 
 function hmac(key: Buffer | string, data: string) {
   return crypto.createHmac("sha256", key).update(data, "utf8").digest();
@@ -30,7 +31,7 @@ function getSigningKey(secret: string, dateStamp: string, region: string, servic
   return hmac(kService, "aws4_request");
 }
 
-export function signSpApiRequest(args: {
+export async function signSpApiRequest(args: {
   method: "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
   url: URL;                 // must include pathname + search
   headers?: Record<string, string>;
@@ -38,9 +39,10 @@ export function signSpApiRequest(args: {
   region?: string;          // default eu-west-1
   service?: string;         // default execute-api
 }) {
-  const accessKeyId = needEnv("SPAPI_AWS_ACCESS_KEY_ID");
-  const secretAccessKey = needEnv("SPAPI_AWS_SECRET_ACCESS_KEY");
-  const sessionToken = envOrEmpty("SPAPI_AWS_SESSION_TOKEN");
+  const creds = await resolveSpApiAwsCreds();
+  const accessKeyId = creds.accessKeyId;
+  const secretAccessKey = creds.secretAccessKey;
+  const sessionToken = creds.sessionToken ?? envOrEmpty("SPAPI_AWS_SESSION_TOKEN");
 
   const region = String(args.region ?? envOrEmpty("SPAPI_AWS_REGION") ?? "eu-west-1").trim();
   const service = String(args.service ?? "execute-api").trim();

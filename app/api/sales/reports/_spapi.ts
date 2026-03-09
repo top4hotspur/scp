@@ -4,6 +4,7 @@ import aws4 from "aws4";
 import crypto from "node:crypto";
 import zlib from "node:zlib";
 import { envOrEmpty, needEnv } from "@/lib/spapi/env";
+import { resolveSpApiAwsCreds } from "@/lib/spapi/awsCreds";
 
 const SPAPI_HOST = envOrEmpty("SPAPI_HOST") || "sellingpartnerapi-eu.amazon.com"; // UK/EU
 const SPAPI_REGION = envOrEmpty("SPAPI_AWS_REGION") || envOrEmpty("SPAPI_REGION") || "eu-west-1"; // SigV4 region for SP-API
@@ -35,9 +36,7 @@ async function getLwaAccessToken(): Promise<string> {
 }
 
 export async function spapi<T>(path: string, method: "GET" | "POST" | "DELETE", body?: any): Promise<T> {
-  const accessKeyId = needEnv("SPAPI_AWS_ACCESS_KEY_ID");
-  const secretAccessKey = needEnv("SPAPI_AWS_SECRET_ACCESS_KEY");
-  const sessionToken = envOrEmpty("SPAPI_AWS_SESSION_TOKEN") || undefined;
+  const creds = await resolveSpApiAwsCreds();
 
   const lwa = await getLwaAccessToken();
 
@@ -60,7 +59,7 @@ export async function spapi<T>(path: string, method: "GET" | "POST" | "DELETE", 
       headers,
       body: payload,
     },
-    { accessKeyId, secretAccessKey, sessionToken }
+    { accessKeyId: creds.accessKeyId, secretAccessKey: creds.secretAccessKey, sessionToken: creds.sessionToken }
   );
 
   const res = await fetch(url, {
