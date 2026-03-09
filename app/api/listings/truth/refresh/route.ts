@@ -4,6 +4,7 @@
 import { NextResponse } from "next/server";
 import { DATA_URL, DATA_API_KEY } from "@/lib/dataEnv";
 import { spapiFetch } from "@/lib/spapi/request";
+import { envOrEmpty } from "@/lib/spapi/env";
 
 export const runtime = "nodejs";
 
@@ -275,7 +276,7 @@ export async function POST(req: Request) {
 
     if (!mid) return NextResponse.json({ ok: false, error: "Missing mid" }, { status: 400 });
 
-    const sellerId = safeStr(process.env.SPAPI_SELLER_ID);
+    const sellerId = safeStr(envOrEmpty("SPAPI_SELLER_ID"));
     if (!sellerId) return NextResponse.json({ ok: false, error: "Missing env var: SPAPI_SELLER_ID" }, { status: 500 });
 
     // Targets:

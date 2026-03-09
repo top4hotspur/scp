@@ -12,8 +12,8 @@ export const handler = async () => {
 
   const url =
     token
-      ? `${baseUrl.replace(/\/$/, "")}/api/inventory/scheduler/tick?token=${encodeURIComponent(token)}`
-      : `${baseUrl.replace(/\/$/, "")}/api/inventory/scheduler/tick`;
+      ? `${baseUrl.replace(/\/$/, "")}/api/scheduler/tick?token=${encodeURIComponent(token)}`
+      : `${baseUrl.replace(/\/$/, "")}/api/scheduler/tick`;
 
   const res = await fetch(url, { method: "POST" });
   const json = await res.json().catch(() => ({} as any));
@@ -25,11 +25,10 @@ export const handler = async () => {
 
   // Keep logs minimal & structured
   console.log("[schedulerTick] ok", {
-    due: json?.due ?? [],
-    ran: (json?.ran ?? []).map((x: any) => x?.key).filter(Boolean),
-    skipped: json?.skipped ?? false,
-    reason: json?.reason ?? null,
+    midsToRun: json?.midsToRun ?? [],
+    ran: (json?.ran ?? []).map((x: any) => `${x?.step ?? "?"}:${x?.mid ?? "?"}`).filter(Boolean),
+    errors: Array.isArray(json?.errors) ? json.errors.length : 0,
   });
 
-  return { ok: true, due: json?.due ?? [], ran: json?.ran ?? [], skipped: json?.skipped ?? false };
+  return { ok: true, midsToRun: json?.midsToRun ?? [], ran: json?.ran ?? [], errors: json?.errors ?? [] };
 };
