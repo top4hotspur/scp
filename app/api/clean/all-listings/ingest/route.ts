@@ -23,6 +23,26 @@ async function gql<T>(query: string, variables?: any): Promise<T> {
 // ReportType for this file format is typically merchant listings all data.
 const REPORT_TYPE = "GET_MERCHANT_LISTINGS_ALL_DATA";
 
+const GET_SETTINGS = /* GraphQL */ `
+  query GetAppSettings($id: ID!) {
+    getAppSettings(id: $id) {
+      id
+      reportPendingByKeyJson
+      reportLastSuccessByKeyJson
+    }
+  }
+`;
+
+const PUT_SETTINGS = /* GraphQL */ `
+  mutation UpdateAppSettings($input: UpdateAppSettingsInput!) {
+    updateAppSettings(input: $input) {
+      id
+      reportPendingByKeyJson
+      reportLastSuccessByKeyJson
+    }
+  }
+`;
+
 const LIST_STRANDED_ISSUES = /* GraphQL */ `
   query ListCleanListingIssues($limit: Int, $nextToken: String, $filter: ModelCleanListingIssueFilterInput) {
     listCleanListingIssues(limit: $limit, nextToken: $nextToken, filter: $filter) {
@@ -106,6 +126,21 @@ function parseTsv(text: string): { header: string[]; rows: Record<string, string
 
 function nowIso() {
   return new Date().toISOString();
+}
+
+function parseWaitSeconds(v: string | null, def = 20) {
+  const n = Number(v);
+  if (!Number.isFinite(n)) return def;
+  return Math.max(2, Math.min(120, Math.floor(n)));
+}
+
+function safeJson<T>(s: unknown, fallback: T): T {
+  try {
+    const v = typeof s === "string" ? JSON.parse(s) : s;
+    return (v ?? fallback) as T;
+  } catch {
+    return fallback;
+  }
 }
 
 function normSku(x: any): string {
@@ -231,21 +266,35 @@ export async function POST(req: Request) {
   try {
     const url = new URL(req.url);
     const mid = String(url.searchParams.get("mid") ?? "").trim();
+    const waitSeconds = parseWaitSeconds(url.searchParams.get("waitSeconds"), 20);
     if (!mid) return NextResponse.json({ ok: false, error: "Missing mid" }, { status: 400 });
 
-    // 1) Create report
-    const created = (await spapiFetch({
-      method: "POST",
-      path: "/reports/2021-06-30/reports",
-      body: { reportType: REPORT_TYPE, marketplaceIds: [mid] },
-    })) as any;
+    const settings = await gql<{ getAppSettings?: any }>(GET_SETTINGS, { id: "global" }).catch(() => ({ getAppSettings: null }));
+    const pending = safeJson<Record<string, any>>(settings?.getAppSettings?.reportPendingByKeyJson ?? "{}", {});
+    const lastSuccess = safeJson<Record<string, string>>(settings?.getAppSettings?.reportLastSuccessByKeyJson ?? "{}", {});
 
-    const reportId = String(created?.reportId ?? "");
-    if (!reportId) throw new Error("Missing reportId from create report");
+    const pendingKey = `LISTINGS_REPORT:${mid}`;
+    let reportId = String(pending?.[pendingKey]?.reportId ?? "").trim();
 
-    // 2) Poll until DONE (simple poll; you can add backoff later)
+    // 1) Create report only when we do not already have one pending
+    if (!reportId) {
+      const created = (await spapiFetch({
+        method: "POST",
+        path: "/reports/2021-06-30/reports",
+        body: { reportType: REPORT_TYPE, marketplaceIds: [mid] },
+      })) as any;
+
+      reportId = String(created?.reportId ?? "");
+      if (!reportId) throw new Error("Missing reportId from create report");
+
+      pending[pendingKey] = { reportId, reportType: REPORT_TYPE, createdAtIso: nowIso() };
+      await gql(PUT_SETTINGS, { input: { id: "global", reportPendingByKeyJson: JSON.stringify(pending) } }).catch(() => null);
+    }
+
+    // 2) Poll until DONE within wait budget (avoid long request timeouts on hosting)
     let report: any = null;
-    for (let i = 0; i < 30; i++) {
+    const startedAt = Date.now();
+    while (Date.now() - startedAt < waitSeconds * 1000) {
       report = (await spapiFetch({
         method: "GET",
         path: `/reports/2021-06-30/reports/${encodeURIComponent(reportId)}`,
@@ -256,7 +305,18 @@ export async function POST(req: Request) {
       if (status === "CANCELLED" || status === "FATAL") throw new Error(`Report failed: ${status}`);
       await new Promise((r) => setTimeout(r, 2000));
     }
-    if (String(report?.processingStatus ?? "") !== "DONE") throw new Error("Report did not reach DONE in time");
+
+    const finalStatus = String(report?.processingStatus ?? "IN_PROGRESS");
+    if (finalStatus !== "DONE") {
+      return NextResponse.json({
+        ok: true,
+        mid,
+        status: finalStatus,
+        reportId,
+        resumedPending: Boolean(pending?.[pendingKey]?.reportId),
+        note: "Listings report queued/in-progress. Re-run this endpoint in ~1-2 minutes to continue tracking the same report.",
+      });
+    }
 
     const reportDocumentId = String(report?.reportDocumentId ?? "");
     if (!reportDocumentId) throw new Error("Missing reportDocumentId");
@@ -329,6 +389,16 @@ inactiveReasonCode: norm.code || null,
   overlayCountsJson: JSON.stringify({ STRANDED: strandedSkus.size }),
 });
 
+    delete pending[pendingKey];
+    lastSuccess[pendingKey] = nowIso();
+    await gql(PUT_SETTINGS, {
+      input: {
+        id: "global",
+        reportPendingByKeyJson: JSON.stringify(pending),
+        reportLastSuccessByKeyJson: JSON.stringify(lastSuccess),
+      },
+    }).catch(() => null);
+
     return NextResponse.json({
   ok: true,
   mid,
@@ -337,6 +407,7 @@ inactiveReasonCode: norm.code || null,
   total,
   countsByStatus,
   overlays: { STRANDED: strandedSkus.size },
+  pendingCleared: true,
 });
   } catch (e: any) {
     return NextResponse.json({ ok: false, error: String(e?.message ?? e) }, { status: 500 });
