@@ -484,7 +484,7 @@ case "daysToOrder": {
           <h1 className="text-2xl font-semibold">MI • Restock</h1>
           <p className="text-white/60">Snapshot-first + supplier-driven restock planning (no SP-API calls from UI).</p>
           <p className="text-xs text-white/60 mt-1">
-            Snapshot: {snap?.status ?? "â€”"} Â· {fmtIso(snap?.createdAtIso)}
+            Snapshot: {snap?.status ?? "—"} Â· {fmtIso(snap?.createdAtIso)}
           </p>
         </div>
 
@@ -575,7 +575,7 @@ case "daysToOrder": {
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             <Metric label="Order Units" value={orderSummary.orderUnits} />
             <Metric label="Order Value" value={fmtMoney(orderSummary.orderValue)} />
-            <Metric label="Order Profit" value={orderSummary.orderProfit == null ? "â€”" : fmtMoney(orderSummary.orderProfit)} />
+            <Metric label="Order Profit" value={orderSummary.orderProfit == null ? "—" : fmtMoney(orderSummary.orderProfit)} />
             <Metric label="Lines" value={orderSummary.lines} />
           </div>
         </div>
@@ -629,15 +629,15 @@ case "daysToOrder": {
           return (
             <tr key={k} className="border-t border-white/5">
               <td className="px-3 py-2 font-medium whitespace-nowrap">{r.sku}</td>
-              <td className="px-3 py-2">{r.shortTitle ?? "â€”"}</td>
+              <td className="px-3 py-2">{r.shortTitle ?? "—”"}</td>
 
               <td className="px-3 py-2 text-right">{fmtInt(avail)}</td>
               <td className="px-3 py-2 text-right">{fmtInt(inbound)}</td>
               <td className="px-3 py-2 text-right">{fmtInt(sales)}</td>
 
               <td className="px-3 py-2 text-right">{fmtInt(r.projectedBalance)}</td>
-              <td className="px-3 py-2 text-right">{r.daysOfCover == null ? "â€”" : fmtInt(r.daysOfCover)}</td>
-              <td className="px-3 py-2 text-right">{r.daysToOrder == null ? "â€”" : fmtInt(r.daysToOrder)}</td>
+              <td className="px-3 py-2 text-right">{r.daysOfCover == null ? "—" : fmtInt(r.daysOfCover)}</td>
+              <td className="px-3 py-2 text-right">{r.daysToOrder == null ? "—" : fmtInt(r.daysToOrder)}</td>
 
               <td className="px-3 py-2 text-right">
                 <input

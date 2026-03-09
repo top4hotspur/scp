@@ -217,7 +217,7 @@ export default function Page() {
     <div className="space-y-4">
       <div className="flex items-start justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-semibold">Repricer Ã¢â‚¬Â¢ Strategies</h1>
+          <h1 className="text-2xl font-semibold">Repricer • Strategies</h1>
           <p className="text-white/60">
             Define how we price: match (no 1p race), Buy Box handling, only-seller climb, velocity guard + backoff.
           </p>
@@ -281,7 +281,7 @@ export default function Page() {
                   </span>
                 </div>
                 <div className="mt-1 text-xs text-white/60">
-                  {s.priceMatchMode.replaceAll("_", " ")} Ã¢â‚¬Â¢ Own BB: {s.whenOwnBuyBox.replaceAll("_", " ")} Ã¢â‚¬Â¢ Only seller:{" "}
+                  {s.priceMatchMode.replaceAll("_", " ")} • Own BB: {s.whenOwnBuyBox.replaceAll("_", " ")} • Only seller:{" "}
                   {s.whenOnlySeller.replaceAll("_", " ")}
                 </div>
               </button>
@@ -433,8 +433,8 @@ export default function Page() {
                       className="w-full rounded-xl border border-white/10 bg-black/20 px-3 py-2 outline-none"
                     >
                       <option value="PCT">Percent</option>
-                      <option value="FIXED">Fixed Ã‚£</option>
-                      <option value="MAX_OF_BOTH">Max(Ã‚£,%)</option>
+                      <option value="FIXED">Fixed £</option>
+                      <option value="MAX_OF_BOTH">Max(£,%)</option>
                     </select>
                   </label>
                   <label className="space-y-1">
@@ -447,7 +447,7 @@ export default function Page() {
                     />
                   </label>
                   <label className="space-y-1">
-                    <div className="text-xs text-white/60">Step Ã‚£ / day</div>
+                    <div className="text-xs text-white/60">Step £ / day</div>
                     <input
                       type="number"
                       value={selected.stepGbpPerDay ?? ""}
@@ -456,7 +456,7 @@ export default function Page() {
                     />
                   </label>
                   <label className="space-y-1">
-                    <div className="text-xs text-white/60">Hard max price (Ã‚£)</div>
+                    <div className="text-xs text-white/60">Hard max price (£)</div>
                     <input
                       type="number"
                       value={selected.maxPriceGbp ?? ""}
@@ -468,7 +468,7 @@ export default function Page() {
               </div>
 
               <div className="rounded-2xl border border-white/10 bg-black/10 p-3">
-                <div className="mb-2 text-sm font-medium">Velocity guard (the Ã¢â‚¬Å“cleverÃ¢â‚¬Â bit)</div>
+                <div className="mb-2 text-sm font-medium">Velocity guard (the "clever" bit)</div>
                 <div className="grid gap-3 md:grid-cols-3">
                   <label className="flex items-end gap-2">
                     <input
