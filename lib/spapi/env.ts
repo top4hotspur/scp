@@ -10,10 +10,56 @@ const ALIASES: Record<string, string[]> = {
   SPAPI_SELLER_ID: ["SELLER_ID", "AMAZON_SELLER_ID", "SP_API_SELLER_ID", "SPAPI_SELLER"],
 };
 
+let cache: Record<string, string> | null = null;
+
+function readSecretBlob(): Record<string, string> {
+  if (cache) return cache;
+
+  const blobKeys = ["secrets", "SECRETS", "AMPLIFY_SECRETS", "amplify_secrets"];
+  const out: Record<string, string> = {};
+
+  for (const key of blobKeys) {
+    const raw = String(process.env[key] ?? "").trim();
+    if (!raw) continue;
+
+    try {
+      const obj = JSON.parse(raw) as Record<string, unknown>;
+      for (const [k, v] of Object.entries(obj)) {
+        const sv = String(v ?? "").trim();
+        if (!sv) continue;
+
+        out[k] = sv;
+        out[k.toUpperCase()] = sv;
+
+        // SSM path style: /amplify/<app>/<branch>/NAME => also index by NAME
+        const base = k.split("/").filter(Boolean).pop() ?? "";
+        if (base) {
+          out[base] = sv;
+          out[base.toUpperCase()] = sv;
+        }
+      }
+    } catch {
+      // ignore malformed blob and continue with normal envs
+    }
+  }
+
+  cache = out;
+  return out;
+}
+
+function fromEnvOrBlob(name: string): string {
+  const direct = String(process.env[name] ?? "").trim();
+  if (direct) return direct;
+
+  const blob = readSecretBlob();
+  const v = String(blob[name] ?? blob[name.toUpperCase()] ?? "").trim();
+  return v;
+}
+
 export function envOrEmpty(name: string): string {
   const names = [name, ...(ALIASES[name] ?? [])];
   for (const n of names) {
-    const v = String(process.env[n] ?? "").trim();
+    const v = fromEnvOrBlob(n);
     if (v) return v;
   }
   return "";
