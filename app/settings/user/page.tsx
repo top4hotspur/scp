@@ -137,6 +137,10 @@ export default function Page() {
   const [lastRunByKey, setLastRunByKey] = useState<Record<string, string>>({});
   const [lastSuccessByKey, setLastSuccessByKey] = useState<Record<string, string>>({});
   const [automationHealth, setAutomationHealth] = useState<AutomationHealthRow[]>([]);
+  const [marketplaceIds, setMarketplaceIds] = useState<string[]>([]);
+  const [selectedMid, setSelectedMid] = useState("");
+  const [runBusy, setRunBusy] = useState<string | null>(null);
+  const [runOutput, setRunOutput] = useState<string>("");
 
   async function load() {
     setLoading(true);
@@ -148,6 +152,12 @@ export default function Page() {
       if (!r.ok || !j?.ok) throw new Error(j?.error ?? `HTTP ${r.status}`);
 
       const s = j.settings ?? {};
+
+      const ukMid = String(s.ukMarketplaceId ?? "").trim();
+      const euMids = safeJson<string[]>(s.euMarketplaceIdsJson ?? "[]", []);
+      const mids = Array.from(new Set([ukMid, ...euMids].map((x) => String(x ?? "").trim()).filter(Boolean)));
+      setMarketplaceIds(mids);
+      setSelectedMid((prev) => (prev && mids.includes(prev) ? prev : mids[0] ?? ""));
 
       setDayStartHour(clampHour(s.reportDayStartHour, 7));
       setDayEndHour(clampHour(s.reportDayEndHour, 22));
@@ -238,6 +248,23 @@ export default function Page() {
     }));
   }
 
+  async function runNow(label: string, url: string) {
+    setRunBusy(label);
+    setRunOutput("");
+    setErr(null);
+    try {
+      const r = await fetch(url, { method: "POST" });
+      const j = await r.json().catch(() => ({}));
+      if (!r.ok || !j?.ok) throw new Error(j?.error ?? `HTTP ${r.status}`);
+      setRunOutput(JSON.stringify(j, null, 2));
+      await load();
+    } catch (e: any) {
+      setErr(`Manual run failed (${label}): ${e?.message || String(e)}`);
+    } finally {
+      setRunBusy(null);
+    }
+  }
+
   const statusRows = useMemo(() => {
     const keys = Array.from(new Set([...Object.keys(lastRunByKey), ...Object.keys(lastSuccessByKey)])).sort();
     return keys.map((k) => ({ key: k, lastRun: lastRunByKey[k], lastSuccess: lastSuccessByKey[k] }));
@@ -274,6 +301,62 @@ export default function Page() {
       {err ? <div className="rounded-2xl border border-red-500/30 bg-red-500/10 p-3 text-sm text-red-200">{err}</div> : null}
       {okMsg ? <div className="rounded-2xl border border-emerald-500/30 bg-emerald-500/10 p-3 text-sm text-emerald-200">{okMsg}</div> : null}
 
+
+      <div className="rounded-2xl border border-white/10 bg-white/5 p-4 space-y-3">
+        <div className="text-sm font-semibold">Manual automation test run</div>
+        <div className="text-xs text-white/60">Temporary diagnostics controls to verify scheduler plumbing. Trigger a run and inspect JSON response.</div>
+
+        <div className="flex flex-wrap items-end gap-3">
+          <label className="space-y-1">
+            <div className="text-xs text-white/60">Marketplace</div>
+            <select
+              value={selectedMid}
+              onChange={(e) => setSelectedMid(String(e.target.value || ""))}
+              className="min-w-[260px] rounded-xl border border-white/10 bg-black/30 px-3 py-2 text-sm outline-none"
+            >
+              {marketplaceIds.map((mid) => (
+                <option key={mid} value={mid}>
+                  {mid}
+                </option>
+              ))}
+            </select>
+          </label>
+
+          <button
+            disabled={!selectedMid || !!runBusy}
+            onClick={() => runNow("Listings", `/api/clean/all-listings/ingest?mid=${encodeURIComponent(selectedMid)}`)}
+            className="rounded-xl border border-white/10 bg-white/10 px-3 py-2 text-sm hover:bg-white/15 disabled:opacity-50"
+          >Run Listings</button>
+          <button
+            disabled={!selectedMid || !!runBusy}
+            onClick={() => runNow("Sales Orders", `/api/sales/reports/orders/download?mid=${encodeURIComponent(selectedMid)}`)}
+            className="rounded-xl border border-white/10 bg-white/10 px-3 py-2 text-sm hover:bg-white/15 disabled:opacity-50"
+          >Run Sales Orders</button>
+          <button
+            disabled={!selectedMid || !!runBusy}
+            onClick={() => runNow("Sales Snapshot", `/api/sales/build-snapshot?mid=${encodeURIComponent(selectedMid)}`)}
+            className="rounded-xl border border-white/10 bg-white/10 px-3 py-2 text-sm hover:bg-white/15 disabled:opacity-50"
+          >Run Sales Snapshot</button>
+          <button
+            disabled={!selectedMid || !!runBusy}
+            onClick={() => runNow("Fee Estimate", `/api/fees/estimate?mid=${encodeURIComponent(selectedMid)}`)}
+            className="rounded-xl border border-white/10 bg-white/10 px-3 py-2 text-sm hover:bg-white/15 disabled:opacity-50"
+          >Run Fee Estimate</button>
+          <button
+            disabled={!selectedMid || !!runBusy}
+            onClick={() => runNow("Repricer", `/api/repricer/run?mid=${encodeURIComponent(selectedMid)}`)}
+            className="rounded-xl border border-white/10 bg-white/10 px-3 py-2 text-sm hover:bg-white/15 disabled:opacity-50"
+          >Run Repricer</button>
+          <button
+            disabled={!!runBusy}
+            onClick={() => runNow("Scheduler Force", `/api/scheduler/tick?force=1&verbose=1${selectedMid ? `&mid=${encodeURIComponent(selectedMid)}` : ""}`)}
+            className="rounded-xl border border-emerald-400/30 bg-emerald-500/10 px-3 py-2 text-sm hover:bg-emerald-500/15 disabled:opacity-50"
+          >Force Scheduler Tick</button>
+        </div>
+
+        {runBusy ? <div className="text-xs text-white/60">Running: {runBusy}…</div> : null}
+        {runOutput ? <pre className="max-h-64 overflow-auto rounded-xl border border-white/10 bg-black/40 p-3 text-xs">{runOutput}</pre> : null}
+      </div>
 
       <div className="rounded-2xl border border-white/10 bg-white/5 p-4 space-y-3">
         <div className="text-sm font-semibold">Automation status + snapshot witness + rough AWS cost</div>

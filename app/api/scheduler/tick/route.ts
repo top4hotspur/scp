@@ -85,6 +85,7 @@ const GET_SETTINGS = /* GraphQL */ `
       reportDayStartHour
       reportDayEndHour
       reportCadenceByReportJson
+      reportLastSuccessByKeyJson
 
       inventoryLastRunByKeyJson
     }
@@ -257,6 +258,8 @@ const midsToRun = onlyMid ? uniqNonEmpty([onlyMid]) : allMids;
 
     const storedCadence = safeJson<CadenceMap>(settings.reportCadenceByReportJson ?? "{}", {});
     const cadence: CadenceMap = { ...defaultCadence(), ...storedCadence };
+    const lastRunMap = safeJson<Record<string, string>>(settings.inventoryLastRunByKeyJson ?? "{}", {});
+    const lastSuccessMap = safeJson<Record<string, string>>(settings.reportLastSuccessByKeyJson ?? "{}", {});
 
     const ran: any[] = [];
     const errors: any[] = [];
@@ -322,31 +325,34 @@ await stampLastRun("global", settings, key);
     `${baseUrl}/api/clean/all-listings/ingest?mid=${encodeURIComponent(mid)}`
   );
 
-  // Fee estimate stays OFF unless explicitly enabled
-  await maybeRun("fee.estimate", mid, null, `${baseUrl}/api/fees/estimate?mid=${encodeURIComponent(mid)}`);
+  const feeAge = minutesSince(lastRunMap[`FEE:${mid}`] ?? null);
+  await maybeRun("fee.estimate", mid, feeAge, `${baseUrl}/api/fees/estimate?mid=${encodeURIComponent(mid)}`);
 }
 
 if (!onlyRepricer && !onlyInventory) {
-  const salesAge = await getSalesAgeMinutes(mid);
+  const salesOrdersAge = minutesSince(lastSuccessMap[`SALES_ORDERS:${mid}`] ?? lastRunMap[`SALES:${mid}`] ?? null);
+  const salesSnapshotAge = await getSalesAgeMinutes(mid);
 
-  await maybeRun("sales.orders", mid, salesAge, `${baseUrl}/api/sales/reports/orders/download?mid=${encodeURIComponent(mid)}`);
-  await maybeRun("sales.snapshot", mid, salesAge, `${baseUrl}/api/sales/build-snapshot?mid=${encodeURIComponent(mid)}`);
+  await maybeRun("sales.orders", mid, salesOrdersAge, `${baseUrl}/api/sales/reports/orders/download?mid=${encodeURIComponent(mid)}`);
+  await maybeRun("sales.snapshot", mid, salesSnapshotAge, `${baseUrl}/api/sales/build-snapshot?mid=${encodeURIComponent(mid)}`);
 }
             // ---------- Repricer ----------
       const isUk = mid === ukMid;
 
       if (isUk) {
+        const repricerAge = minutesSince(lastRunMap[`REPRICER:${mid}`] ?? null);
         await maybeRun(
           "repricer.uk",
           mid,
-          null, // repricer does not use snapshot age
+          repricerAge,
           `${baseUrl}/api/repricer/run?mid=${encodeURIComponent(mid)}`
         );
       } else {
+        const repricerAge = minutesSince(lastRunMap[`REPRICER:${mid}`] ?? null);
         await maybeRun(
           "repricer.other",
           mid,
-          null,
+          repricerAge,
           `${baseUrl}/api/repricer/run?mid=${encodeURIComponent(mid)}`
         );
       }
