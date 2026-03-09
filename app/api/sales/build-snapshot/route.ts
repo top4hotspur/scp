@@ -445,9 +445,10 @@ const marginPct = revenueExVat > 0 ? (profit / revenueExVat) * 100 : null;
 const denom = supplierCostLine > 0 ? supplierCostLine : null;
 const roiPct = denom ? (profit / denom) * 100 : null;
 
-// Missing flags: row is complete only when supplier cost and stored fee estimate are both present.
-const missingCostFields =
-  unitCost == null || !hasFeeEstimate;
+// Mark row as missing only when we cannot resolve supplier cost.
+// Fee estimates can lag behind ingestion; we still compute a usable profit/ROI/margin
+// from known costs so the MI sales table does not degrade to red X placeholders.
+const missingCostFields = unitCost == null;
 
           const stockAvailable = stockBySku.get(String(x.sku)) ?? null;
 
@@ -455,7 +456,7 @@ return {
   sku: x.sku,
   shortTitle: x.shortTitle ?? null,
   listingTitle: x.listingTitle ?? null,
-  marketplaceId: x.marketplaceId,
+  marketplaceId: x.marketplaceId || mid,
   qty: x.qty,
   shippedAtIso: pickAtIso(x, b.bucket), // bucket timestamp
   currency: x.currency,
@@ -528,4 +529,3 @@ return {
     return NextResponse.json({ ok: false, error: msg }, { status: 500 });
   }
 }
-
