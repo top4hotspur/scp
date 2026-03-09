@@ -136,9 +136,9 @@ function defaultCadence(): CadenceMap {
     "sales.orders": { enabled: true, dayMinutes: 15, nightMinutes: 120 },
     "sales.snapshot": { enabled: true, dayMinutes: 15, nightMinutes: 120 },
 
-    "fee.estimate": { enabled: true, dayMinutes: 480, nightMinutes: 960 },
+    "fee.estimate": { enabled: true, dayMinutes: 1440, nightMinutes: 1440 },
 
-    // NEW â€” Repricer
+    // NEW — Repricer
     "repricer.uk": { enabled: true, dayMinutes: 15, nightMinutes: 60 },
     "repricer.other": { enabled: true, dayMinutes: 60, nightMinutes: 120 },
   };
@@ -258,7 +258,7 @@ const midsToRun = onlyMid ? uniqNonEmpty([onlyMid]) : allMids;
 if (!out.ok) {
   ran.push(verbose ? { step: stepKey, mid, ok: false, out } : { step: stepKey, mid, ok: false });
   errors.push({ step: stepKey, mid, status: out.status, error: out?.json?.error ?? `HTTP ${out.status}` });
-  return; // donÃ¢â‚¬â„¢t explode the whole tick
+  return; // don't explode the whole tick
 }
 
 ran.push(verbose ? { step: stepKey, mid, ok: true, out } : { step: stepKey, mid, ok: true });

@@ -28,6 +28,19 @@ async function gql<T>(query: string, variables?: any): Promise<T> {
   return json.data as T;
 }
 
+function baseUrlFromReq(req: Request) {
+  const host = req.headers.get("x-forwarded-host") ?? req.headers.get("host");
+  const proto = req.headers.get("x-forwarded-proto") ?? "http";
+  if (!host) return null;
+  return `${proto}://${host}`;
+}
+
+async function rebuildSnapshot(req: Request, mid: string) {
+  const base = baseUrlFromReq(req);
+  if (!base) return;
+  await fetch(`${base}/api/sales/build-snapshot?mid=${encodeURIComponent(mid)}`, { method: "POST", cache: "no-store" });
+}
+
 const GET_SALES_SNAPSHOT = /* GraphQL */ `
   query GetSalesSnapshot($marketplaceId: String!, $bucket: String!) {
     getSalesSnapshot(marketplaceId: $marketplaceId, bucket: $bucket) {
@@ -46,8 +59,13 @@ export async function GET(req: Request) {
     const { searchParams } = new URL(req.url);
     const mid = String(searchParams.get("mid") ?? "").trim();
     const bucket = String(searchParams.get("bucket") ?? "today").trim();
+    const fresh = String(searchParams.get("fresh") ?? "").trim() === "1";
 
     if (!mid) return NextResponse.json({ ok: false, error: "Missing mid" }, { status: 400 });
+
+    if (fresh) {
+      await rebuildSnapshot(req, mid);
+    }
 
     const data = await gql<{ getSalesSnapshot: any }>(GET_SALES_SNAPSHOT, {
       marketplaceId: mid,
