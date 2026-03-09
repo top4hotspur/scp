@@ -23,7 +23,7 @@ export async function spapiFetch<T>(args: {
 
   const bodyStr = args.body ? JSON.stringify(args.body) : "";
 
-  const { headers } = signSpApiRequest({
+  const { headers } = await signSpApiRequest({
     method: args.method,
     url,
     headers: {

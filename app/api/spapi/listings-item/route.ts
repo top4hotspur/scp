@@ -1,6 +1,7 @@
 // app/api/spapi/listings-item/route.ts
 import { NextResponse } from "next/server";
 import { spapiFetch } from "@/lib/spapi/request";
+import { envOrEmpty } from "@/lib/spapi/env";
 
 export async function GET(req: Request) {
   const { searchParams } = new URL(req.url);
@@ -12,7 +13,7 @@ export async function GET(req: Request) {
     return NextResponse.json({ ok: false, error: "mid and sku are required" }, { status: 400 });
   }
 
-  const sellerId = String(process.env.SPAPI_SELLER_ID ?? "").trim();
+  const sellerId = envOrEmpty("SPAPI_SELLER_ID");
   if (!sellerId) {
     return NextResponse.json(
       { ok: false, error: "Missing env var SPAPI_SELLER_ID" },
