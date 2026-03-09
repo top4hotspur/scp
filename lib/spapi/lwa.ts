@@ -1,12 +1,10 @@
+import { needEnv } from "./env";
+
 // lib/spapi/lwa.ts
 export async function getLwaAccessToken(): Promise<string> {
-  const clientId = String(process.env.SPAPI_LWA_CLIENT_ID ?? "").trim();
-  const clientSecret = String(process.env.SPAPI_LWA_CLIENT_SECRET ?? "").trim();
-  const refreshToken = String(process.env.SPAPI_LWA_REFRESH_TOKEN ?? "").trim();
-
-  if (!clientId) throw new Error("Missing env var: SPAPI_LWA_CLIENT_ID");
-  if (!clientSecret) throw new Error("Missing env var: SPAPI_LWA_CLIENT_SECRET");
-  if (!refreshToken) throw new Error("Missing env var: SPAPI_LWA_REFRESH_TOKEN");
+  const clientId = needEnv("SPAPI_LWA_CLIENT_ID");
+  const clientSecret = needEnv("SPAPI_LWA_CLIENT_SECRET");
+  const refreshToken = needEnv("SPAPI_LWA_REFRESH_TOKEN");
 
   const body = new URLSearchParams({
     grant_type: "refresh_token",

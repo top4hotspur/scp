@@ -30,7 +30,13 @@
 
   const DockCtx = createContext<DockApi | null>(null);
 
-  function uid() {
+  function normalizeHref(href: string): string {
+  const h = String(href ?? "").trim();
+  if (!h) return "/";
+  return h.startsWith("/") ? h : `/${h}`;
+}
+
+function uid() {
     return Math.random().toString(16).slice(2) + Date.now().toString(16);
   }
 
@@ -47,8 +53,11 @@
           const pane = target === "left" ? s.left : s.right;
 
           // already open?
-          const existing = pane.tabs.find((t) => t.href === doc.href);
-          const nextDoc: DockDoc = existing ?? { ...doc, id: uid() };
+          const normalizedHref = normalizeHref(doc.href);
+          const normalizedDoc = { ...doc, href: normalizedHref };
+
+          const existing = pane.tabs.find((t) => normalizeHref(t.href) === normalizedHref);
+          const nextDoc: DockDoc = existing ?? { ...normalizedDoc, id: uid() };
           const nextTabs = existing ? pane.tabs : [nextDoc, ...pane.tabs];
 
           const nextPane: PaneState = { tabs: nextTabs, activeId: nextDoc.id };
