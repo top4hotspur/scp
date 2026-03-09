@@ -84,6 +84,10 @@ function londonDayStartDate(now = new Date()): Date {
   return new Date(londonDayStartIso(now));
 }
 
+function normSku(v: unknown): string {
+  return String(v ?? "").trim().toUpperCase();
+}
+
 
 async function loadSupplierCostBySku(): Promise<Map<string, number>> {
   const map = new Map<string, number>();
@@ -98,7 +102,7 @@ async function loadSupplierCostBySku(): Promise<Map<string, number>> {
     const items = data?.listSupplierMaps?.items ?? [];
     for (const it of items) {
       if (!it) continue;
-      const sku = String(it.sku ?? "").trim();
+      const sku = normSku(it.sku);
       if (!sku) continue;
 
       const productCost = Number(it.productCost);
@@ -410,7 +414,7 @@ const windowLines = [...byKey.values()];
             safeNum(x.promoDiscount);
 
           // SupplierMap unit cost (productCost + prepCost + shippingCost)
-const skuKey = String(x.sku ?? "").trim();
+const skuKey = normSku(x.sku);
 
 // Resolve UNIT cost (ex VAT)
 // Priority: SalesLine.supplierCostExVat (if already stored) else SupplierMap-derived cost
@@ -422,8 +426,9 @@ const unitCost =
 const qty = safeNum(x.qty);
 const supplierCostLine = unitCost != null ? unitCost * qty : 0;
 
-// Fees (if missing, treat as 0 but mark it missing)
-const fees = safeNum(x.feeEstimateTotal);
+// Fees: require explicit stored value for cost-complete profitability.
+const hasFeeEstimate = Number.isFinite(Number(x.feeEstimateTotal)) && x.feeEstimateTotal != null;
+const fees = hasFeeEstimate ? Number(x.feeEstimateTotal) : 0;
 
 // Other operational costs (already ex-VAT in your model intent)
 const inbound = safeNum(x.inboundShipping);
@@ -431,12 +436,8 @@ const prep = safeNum(x.prepCost);
 
 const costs = supplierCostLine + inbound + prep + fees;
 
-// If upstream already computed profitExVat, trust it; else compute
-const computedProfit = revenueExVat - costs;
-const profit =
-  Number.isFinite(Number(x.profitExVat)) && x.profitExVat != null
-    ? Number(x.profitExVat)
-    : computedProfit;
+// Always recompute profit from current cost truth so fee updates flow through snapshots.
+const profit = revenueExVat - costs;
 
 const marginPct = revenueExVat > 0 ? (profit / revenueExVat) * 100 : null;
 
@@ -444,9 +445,9 @@ const marginPct = revenueExVat > 0 ? (profit / revenueExVat) * 100 : null;
 const denom = supplierCostLine > 0 ? supplierCostLine : null;
 const roiPct = denom ? (profit / denom) * 100 : null;
 
-// More useful missing flags (for MI + repricer safety)
+// Missing flags: row is complete only when supplier cost and stored fee estimate are both present.
 const missingCostFields =
-  unitCost == null || fees === 0;
+  unitCost == null || !hasFeeEstimate;
 
           const stockAvailable = stockBySku.get(String(x.sku)) ?? null;
 
@@ -463,6 +464,7 @@ return {
   stockAvailable,
 
   revenueExVat,
+  feeEstimateTotal: hasFeeEstimate ? fees : null,
   profitExVat: profit,
   marginPct,
   roiPct,
@@ -483,6 +485,8 @@ return {
         .sort((a, c) => c.units - a.units)
         .slice(0, 10);
 
+      const completeRows = rows.filter((r) => !r.missingCostFields);
+
       const input = {
         marketplaceId: mid,
         bucket: b.bucket,
@@ -491,8 +495,9 @@ return {
         topSellersJson: JSON.stringify(topSellers),
         totalsJson: JSON.stringify({
           rows: rows.length,
+          rowsWithCompleteCosts: completeRows.length,
           units: rows.reduce((s, r) => s + safeNum(r.qty), 0),
-          profitExVat: rows.reduce((s, r) => s + safeNum(r.profitExVat), 0),
+          profitExVat: completeRows.reduce((s, r) => s + safeNum(r.profitExVat), 0),
         }),
       };
 
