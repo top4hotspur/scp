@@ -1,5 +1,6 @@
 // lib/spapi/sigv4.ts
 import crypto from "node:crypto";
+import { envOrEmpty, needEnv } from "./env";
 
 function hmac(key: Buffer | string, data: string) {
   return crypto.createHmac("sha256", key).update(data, "utf8").digest();
@@ -37,14 +38,11 @@ export function signSpApiRequest(args: {
   region?: string;          // default eu-west-1
   service?: string;         // default execute-api
 }) {
-  const accessKeyId = String(process.env.SPAPI_AWS_ACCESS_KEY_ID ?? "").trim();
-  const secretAccessKey = String(process.env.SPAPI_AWS_SECRET_ACCESS_KEY ?? "").trim();
-  const sessionToken = String(process.env.SPAPI_AWS_SESSION_TOKEN ?? "").trim();
+  const accessKeyId = needEnv("SPAPI_AWS_ACCESS_KEY_ID");
+  const secretAccessKey = needEnv("SPAPI_AWS_SECRET_ACCESS_KEY");
+  const sessionToken = envOrEmpty("SPAPI_AWS_SESSION_TOKEN");
 
-  if (!accessKeyId) throw new Error("Missing env var: SPAPI_AWS_ACCESS_KEY_ID");
-  if (!secretAccessKey) throw new Error("Missing env var: SPAPI_AWS_SECRET_ACCESS_KEY");
-
-  const region = String(args.region ?? process.env.SPAPI_AWS_REGION ?? "eu-west-1").trim();
+  const region = String(args.region ?? envOrEmpty("SPAPI_AWS_REGION") ?? "eu-west-1").trim();
   const service = String(args.service ?? "execute-api").trim();
 
   const method = args.method;
