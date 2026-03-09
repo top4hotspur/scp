@@ -84,6 +84,10 @@ function londonDayStartDate(now = new Date()): Date {
   return new Date(londonDayStartIso(now));
 }
 
+function normSku(v: unknown): string {
+  return String(v ?? "").trim().toUpperCase();
+}
+
 
 async function loadSupplierCostBySku(): Promise<Map<string, number>> {
   const map = new Map<string, number>();
@@ -98,7 +102,7 @@ async function loadSupplierCostBySku(): Promise<Map<string, number>> {
     const items = data?.listSupplierMaps?.items ?? [];
     for (const it of items) {
       if (!it) continue;
-      const sku = String(it.sku ?? "").trim();
+      const sku = normSku(it.sku);
       if (!sku) continue;
 
       const productCost = Number(it.productCost);
@@ -410,7 +414,7 @@ const windowLines = [...byKey.values()];
             safeNum(x.promoDiscount);
 
           // SupplierMap unit cost (productCost + prepCost + shippingCost)
-const skuKey = String(x.sku ?? "").trim();
+const skuKey = normSku(x.sku);
 
 // Resolve UNIT cost (ex VAT)
 // Priority: SalesLine.supplierCostExVat (if already stored) else SupplierMap-derived cost
@@ -431,12 +435,8 @@ const prep = safeNum(x.prepCost);
 
 const costs = supplierCostLine + inbound + prep + fees;
 
-// If upstream already computed profitExVat, trust it; else compute
-const computedProfit = revenueExVat - costs;
-const profit =
-  Number.isFinite(Number(x.profitExVat)) && x.profitExVat != null
-    ? Number(x.profitExVat)
-    : computedProfit;
+// Always recompute profit from current cost truth so fee updates flow through snapshots.
+const profit = revenueExVat - costs;
 
 const marginPct = revenueExVat > 0 ? (profit / revenueExVat) * 100 : null;
 
@@ -483,6 +483,8 @@ return {
         .sort((a, c) => c.units - a.units)
         .slice(0, 10);
 
+      const completeRows = rows.filter((r) => !r.missingCostFields);
+
       const input = {
         marketplaceId: mid,
         bucket: b.bucket,
@@ -491,8 +493,9 @@ return {
         topSellersJson: JSON.stringify(topSellers),
         totalsJson: JSON.stringify({
           rows: rows.length,
+          rowsWithCompleteCosts: completeRows.length,
           units: rows.reduce((s, r) => s + safeNum(r.qty), 0),
-          profitExVat: rows.reduce((s, r) => s + safeNum(r.profitExVat), 0),
+          profitExVat: completeRows.reduce((s, r) => s + safeNum(r.profitExVat), 0),
         }),
       };
 
