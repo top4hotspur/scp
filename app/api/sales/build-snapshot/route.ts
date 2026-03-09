@@ -446,7 +446,7 @@ const roiPct = denom ? (profit / denom) * 100 : null;
 
 // More useful missing flags (for MI + repricer safety)
 const missingCostFields =
-  unitCost == null || fees === 0;
+  unitCost == null;
 
           const stockAvailable = stockBySku.get(String(x.sku)) ?? null;
 

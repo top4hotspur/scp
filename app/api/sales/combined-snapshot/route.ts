@@ -108,10 +108,19 @@ export async function GET(req: Request) {
       for (const r of rows) allRows.push(r);
     }
 
-    // Sort newest first (we store bucket timestamp in shippedAtIso)
-    allRows.sort((a, b) => String(b?.shippedAtIso ?? "").localeCompare(String(a?.shippedAtIso ?? "")));
+    // Cross-market de-duplication safety: if the same line appears in multiple marketplace snapshots,
+    // keep one row in combined view.
+    const dedup = new Map<string, any>();
+    for (const r of allRows) {
+      const key = `${String(r?.orderId ?? "")}#${String(r?.sku ?? "")}#${String(r?.shippedAtIso ?? r?.purchaseAtIso ?? "")}#${String(r?.revenueExVat ?? "")}`;
+      if (!dedup.has(key)) dedup.set(key, r);
+    }
 
-    const rows = allRows.slice(0, 500);
+    // Sort newest first (we store bucket timestamp in shippedAtIso)
+    const dedupRows = [...dedup.values()];
+    dedupRows.sort((a, b) => String(b?.shippedAtIso ?? "").localeCompare(String(a?.shippedAtIso ?? "")));
+
+    const rows = dedupRows.slice(0, 500);
 
     // Aggregate top sellers across all mids
     const bySku = new Map<string, { sku: string; units: number; profit: number }>();

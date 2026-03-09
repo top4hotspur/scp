@@ -45,6 +45,7 @@ const MARKET_LABELS: Record<string, string> = {
   A2NODRKZP88ZB9: "Sweden (SE)",
   A1C3SOZRARQ6R3: "Poland (PL)",
   AMEN7PMS3EDWL: "Belgium (BE)",
+  A28R8C7NBKEWEA: "Ireland (IE)",
 };
 
 function labelForMid(mid: string): string {
@@ -78,7 +79,7 @@ function fmtDt(iso: any): string {
 }
 
 function RedX() {
-  return <span className="text-red-300 font-semibold">✕</span>;
+  return <span className="text-red-300 font-semibold">X</span>;
 }
 
 export default function Page() {
