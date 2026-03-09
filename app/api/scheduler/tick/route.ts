@@ -133,12 +133,14 @@ function defaultCadence(): CadenceMap {
     "inventory.ingest": { enabled: true, dayMinutes: 60, nightMinutes: 180 },
     "inventory.snapshot": { enabled: true, dayMinutes: 60, nightMinutes: 180 },
 
+    "listings.snapshot": { enabled: true, dayMinutes: 360, nightMinutes: 1440 },
+
     "sales.orders": { enabled: true, dayMinutes: 15, nightMinutes: 120 },
     "sales.snapshot": { enabled: true, dayMinutes: 15, nightMinutes: 120 },
 
-    "fee.estimate": { enabled: true, dayMinutes: 480, nightMinutes: 960 },
+    "fee.estimate": { enabled: true, dayMinutes: 1440, nightMinutes: 1440 },
 
-    // NEW â€” Repricer
+    // NEW — Repricer
     "repricer.uk": { enabled: true, dayMinutes: 15, nightMinutes: 60 },
     "repricer.other": { enabled: true, dayMinutes: 60, nightMinutes: 120 },
   };
@@ -164,6 +166,16 @@ const GET_INV_SNAPSHOT_LATEST = /* GraphQL */ `
 
 // Your tree shows SalesSummarySnapshot, not SalesSnapshot.
 // We'll use bucket "30d" (matches your build-snapshot usage).
+const GET_CLEAN_SNAPSHOT_LATEST = /* GraphQL */ `
+  query GetCleanListingSnapshot($marketplaceId: String!, $bucket: String!) {
+    getCleanListingSnapshot(marketplaceId: $marketplaceId, bucket: $bucket) {
+      marketplaceId
+      bucket
+      createdAtIso
+    }
+  }
+`;
+
 const GET_SALES_SUMMARY_SNAPSHOT = /* GraphQL */ `
   query GetSalesSummarySnapshot($marketplaceId: String!, $bucket: String!) {
     getSalesSummarySnapshot(marketplaceId: $marketplaceId, bucket: $bucket) {
@@ -178,6 +190,16 @@ async function getInvAgeMinutes(mid: string): Promise<number | null> {
   try {
     const d: any = await gql(GET_INV_SNAPSHOT_LATEST, { marketplaceId: mid, bucket: "latest" });
     const iso = d?.getInventorySnapshot?.createdAtIso ?? null;
+    return minutesSince(iso);
+  } catch {
+    return null;
+  }
+}
+
+async function getListingsAgeMinutes(mid: string): Promise<number | null> {
+  try {
+    const d: any = await gql(GET_CLEAN_SNAPSHOT_LATEST, { marketplaceId: mid, bucket: "latest" });
+    const iso = d?.getCleanListingSnapshot?.createdAtIso ?? null;
     return minutesSince(iso);
   } catch {
     return null;
@@ -258,7 +280,7 @@ const midsToRun = onlyMid ? uniqNonEmpty([onlyMid]) : allMids;
 if (!out.ok) {
   ran.push(verbose ? { step: stepKey, mid, ok: false, out } : { step: stepKey, mid, ok: false });
   errors.push({ step: stepKey, mid, status: out.status, error: out?.json?.error ?? `HTTP ${out.status}` });
-  return; // donÃ¢â‚¬â„¢t explode the whole tick
+  return; // don't explode the whole tick
 }
 
 ran.push(verbose ? { step: stepKey, mid, ok: true, out } : { step: stepKey, mid, ok: true });
@@ -268,6 +290,7 @@ ran.push(verbose ? { step: stepKey, mid, ok: true, out } : { step: stepKey, mid,
 let key = "";
 if (stepKey.startsWith("inventory.")) key = `INV:${mid}`;
 else if (stepKey.startsWith("sales.")) key = `SALES:${mid}`;
+else if (stepKey === "listings.snapshot") key = `LISTINGS:${mid}`;
 else if (stepKey === "fee.estimate") key = `FEE:${mid}`;
 else if (stepKey.startsWith("repricer.")) key = `REPRICER:${mid}`;
 else key = `${stepKey}:${mid}`;
@@ -289,6 +312,14 @@ await stampLastRun("global", settings, key);
     mid,
     invAge,
     `${baseUrl}/api/inventory/snapshot/build?mid=${encodeURIComponent(mid)}&source=scheduler`
+  );
+
+  const listingsAge = await getListingsAgeMinutes(mid);
+  await maybeRun(
+    "listings.snapshot",
+    mid,
+    listingsAge,
+    `${baseUrl}/api/clean/all-listings/ingest?mid=${encodeURIComponent(mid)}`
   );
 
   // Fee estimate stays OFF unless explicitly enabled
