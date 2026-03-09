@@ -112,7 +112,7 @@ export async function GET(req: Request) {
     // keep one row in combined view.
     const dedup = new Map<string, any>();
     for (const r of allRows) {
-      const key = `${String(r?.orderId ?? "")}#${String(r?.sku ?? "")}#${String(r?.shippedAtIso ?? r?.purchaseAtIso ?? "")}#${String(r?.revenueExVat ?? "")}`;
+      const key = `${String(r?.marketplaceId ?? "")}#${String(r?.orderId ?? "")}#${String(r?.sku ?? "")}#${String(r?.shippedAtIso ?? r?.purchaseAtIso ?? "")}#${String(r?.revenueExVat ?? "")}`;
       if (!dedup.has(key)) dedup.set(key, r);
     }
 
@@ -145,4 +145,3 @@ export async function GET(req: Request) {
     return NextResponse.json({ ok: false, error: String(e?.message ?? e) }, { status: 500 });
   }
 }
-
