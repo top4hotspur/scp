@@ -5,6 +5,15 @@ import { Save, RefreshCw } from "lucide-react";
 
 type SettingsResp = { ok: boolean; settings?: any; error?: string };
 
+type AutomationHealthRow = {
+  system: string;
+  lastAutomationAt: string | null;
+  lastSnapshotAt: string | null;
+  lastSuccessAt: string | null;
+  awsCostPerRunGbp: string;
+  note: string;
+};
+
 // Backward-compatible alias: older branches referenced CountryCode in VAT helpers.
 type CountryCode = string;
 
@@ -121,6 +130,7 @@ export default function Page() {
 
   const [lastRunByKey, setLastRunByKey] = useState<Record<string, string>>({});
   const [lastSuccessByKey, setLastSuccessByKey] = useState<Record<string, string>>({});
+  const [automationHealth, setAutomationHealth] = useState<AutomationHealthRow[]>([]);
 
   async function load() {
     setLoading(true);
@@ -154,6 +164,14 @@ export default function Page() {
 
       setLastRunByKey(safeJson<Record<string, string>>(s.inventoryLastRunByKeyJson ?? "{}", {}));
       setLastSuccessByKey(safeJson<Record<string, string>>(s.reportLastSuccessByKeyJson ?? "{}", {}));
+
+      const hRes = await fetch("/api/settings/automation-health", { cache: "no-store" });
+      const hJson = await hRes.json().catch(() => ({}));
+      if (hRes.ok && hJson?.ok && Array.isArray(hJson.rows)) {
+        setAutomationHealth(hJson.rows as AutomationHealthRow[]);
+      } else {
+        setAutomationHealth([]);
+      }
     } catch (e: any) {
       setErr(e?.message || String(e));
     } finally {
@@ -249,6 +267,45 @@ export default function Page() {
 
       {err ? <div className="rounded-2xl border border-red-500/30 bg-red-500/10 p-3 text-sm text-red-200">{err}</div> : null}
       {okMsg ? <div className="rounded-2xl border border-emerald-500/30 bg-emerald-500/10 p-3 text-sm text-emerald-200">{okMsg}</div> : null}
+
+
+      <div className="rounded-2xl border border-white/10 bg-white/5 p-4 space-y-3">
+        <div className="text-sm font-semibold">Automation status + snapshot witness + rough AWS cost</div>
+        <div className="text-xs text-white/60">Use this to spot which subsystem has stalled and where to investigate first.</div>
+
+        <div className="overflow-auto">
+          <table className="w-full text-sm">
+            <thead className="text-white/60">
+              <tr className="border-b border-white/10">
+                <th className="py-2 pr-3 text-left">System</th>
+                <th className="py-2 pr-3 text-left">Last automation</th>
+                <th className="py-2 pr-3 text-left">Snapshot saved/updated</th>
+                <th className="py-2 pr-3 text-left">Last success</th>
+                <th className="py-2 pr-3 text-left">Rough AWS cost / run</th>
+                <th className="py-2 text-left">Notes</th>
+              </tr>
+            </thead>
+            <tbody>
+              {automationHealth.length ? (
+                automationHealth.map((r) => (
+                  <tr key={r.system} className="border-b border-white/5">
+                    <td className="py-2 pr-3 font-medium">{r.system}</td>
+                    <td className="py-2 pr-3">{fmtIso(r.lastAutomationAt)}</td>
+                    <td className="py-2 pr-3">{fmtIso(r.lastSnapshotAt)}</td>
+                    <td className="py-2 pr-3">{fmtIso(r.lastSuccessAt)}</td>
+                    <td className="py-2 pr-3">{r.awsCostPerRunGbp}</td>
+                    <td className="py-2 text-white/70">{r.note}</td>
+                  </tr>
+                ))
+              ) : (
+                <tr>
+                  <td colSpan={6} className="py-3 text-white/60">No automation health data yet.</td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
 
       <div className="rounded-2xl border border-white/10 bg-white/5 p-4 space-y-3">
         <div className="text-sm font-semibold">Data freshness witness</div>

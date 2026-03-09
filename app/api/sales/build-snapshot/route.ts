@@ -426,8 +426,9 @@ const unitCost =
 const qty = safeNum(x.qty);
 const supplierCostLine = unitCost != null ? unitCost * qty : 0;
 
-// Fees (if missing, treat as 0 but mark it missing)
-const fees = safeNum(x.feeEstimateTotal);
+// Fees: require explicit stored value for cost-complete profitability.
+const hasFeeEstimate = Number.isFinite(Number(x.feeEstimateTotal)) && x.feeEstimateTotal != null;
+const fees = hasFeeEstimate ? Number(x.feeEstimateTotal) : 0;
 
 // Other operational costs (already ex-VAT in your model intent)
 const inbound = safeNum(x.inboundShipping);
@@ -444,9 +445,9 @@ const marginPct = revenueExVat > 0 ? (profit / revenueExVat) * 100 : null;
 const denom = supplierCostLine > 0 ? supplierCostLine : null;
 const roiPct = denom ? (profit / denom) * 100 : null;
 
-// More useful missing flags (for MI + repricer safety)
+// Missing flags: row is complete only when supplier cost and stored fee estimate are both present.
 const missingCostFields =
-  unitCost == null;
+  unitCost == null || !hasFeeEstimate;
 
           const stockAvailable = stockBySku.get(String(x.sku)) ?? null;
 
@@ -463,6 +464,7 @@ return {
   stockAvailable,
 
   revenueExVat,
+  feeEstimateTotal: hasFeeEstimate ? fees : null,
   profitExVat: profit,
   marginPct,
   roiPct,
