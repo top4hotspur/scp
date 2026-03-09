@@ -46,6 +46,26 @@ const UPDATE_SALESLINE_FEE = /* GraphQL */ `
   }
 `;
 
+const GET_SETTINGS = /* GraphQL */ `
+  query GetAppSettings($id: ID!) {
+    getAppSettings(id: $id) {
+      id
+      inventoryLastRunByKeyJson
+      reportLastSuccessByKeyJson
+    }
+  }
+`;
+
+const PUT_SETTINGS = /* GraphQL */ `
+  mutation UpdateAppSettings($input: UpdateAppSettingsInput!) {
+    updateAppSettings(input: $input) {
+      id
+      inventoryLastRunByKeyJson
+      reportLastSuccessByKeyJson
+    }
+  }
+`;
+
 const LIST_SALESLINES_LITE = /* GraphQL */ `
   query ListSalesLinesLite($filter: ModelSalesLineFilterInput, $limit: Int, $nextToken: String) {
     listSalesLines(filter: $filter, limit: $limit, nextToken: $nextToken) {
@@ -64,6 +84,15 @@ const LIST_SALESLINES_LITE = /* GraphQL */ `
 function toFiniteNumber(value: unknown): number | null {
   const n = Number(value);
   return Number.isFinite(n) ? n : null;
+}
+
+function safeJson<T>(s: unknown, fallback: T): T {
+  try {
+    const v = typeof s === "string" ? JSON.parse(s) : s;
+    return (v ?? fallback) as T;
+  } catch {
+    return fallback;
+  }
 }
 
 function toOptStr(value: unknown): string | null {
@@ -143,17 +172,31 @@ export async function POST(req: Request) {
     return NextResponse.json({ ok: false, error: "Missing mid" }, { status: 400 });
   }
 
+  const settings = await gql<{ getAppSettings?: any }>(GET_SETTINGS, { id: "global" }).catch(() => ({ getAppSettings: null }));
+  const runMap = safeJson<Record<string, string>>(settings?.getAppSettings?.inventoryLastRunByKeyJson ?? "{}", {});
+  const successMap = safeJson<Record<string, string>>(settings?.getAppSettings?.reportLastSuccessByKeyJson ?? "{}", {});
+  const runKey = `FEE:${mid}`;
+  runMap[runKey] = new Date().toISOString();
+
   const body: unknown = await req.json().catch(() => ({}));
   const parsedBody = typeof body === "object" && body ? (body as Record<string, unknown>) : {};
   const updates = sanitizeUpdates(parsedBody.updates);
 
   // Keep scheduler behaviour stable: no-op when no fee payload was supplied.
   if (!updates.length) {
+    await gql(PUT_SETTINGS, {
+      input: {
+        id: "global",
+        inventoryLastRunByKeyJson: JSON.stringify(runMap),
+      },
+    }).catch(() => null);
+
     return NextResponse.json({
       ok: true,
       disabled: true,
       mid,
       applied: 0,
+      lastAutomationAt: runMap[runKey],
       note: "Fee estimate writer is idle. Provide body.updates[] with { orderId, lineId|sku|orderItemId, feeEstimateTotal }.",
     });
   }
@@ -184,6 +227,16 @@ export async function POST(req: Request) {
     }
   }
 
+  if (applied > 0) successMap[runKey] = new Date().toISOString();
+
+  await gql(PUT_SETTINGS, {
+    input: {
+      id: "global",
+      inventoryLastRunByKeyJson: JSON.stringify(runMap),
+      reportLastSuccessByKeyJson: JSON.stringify(successMap),
+    },
+  }).catch(() => null);
+
   return NextResponse.json({
     ok: errors.length === 0,
     mid,
@@ -191,6 +244,8 @@ export async function POST(req: Request) {
     received: updates.length,
     applied,
     failed: errors.length,
+    lastAutomationAt: runMap[runKey],
+    lastSuccessAt: successMap[runKey] ?? null,
     errors: errors.slice(0, 20),
   });
 }
