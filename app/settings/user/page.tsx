@@ -7,6 +7,8 @@ type SettingsResp = { ok: boolean; settings?: any; error?: string };
 
 type AutomationHealthRow = {
   system: string;
+  marketplaceId?: string;
+  marketplaceName?: string;
   lastAutomationAt: string | null;
   lastSnapshotAt: string | null;
   lastSuccessAt: string | null;
@@ -41,6 +43,24 @@ const CADENCE_OPTIONS: { key: CadenceKey; label: string; minutes: number }[] = [
   { key: "Weekly", label: "Weekly", minutes: 10080 },
   { key: "Monthly", label: "Monthly", minutes: 43200 },
 ];
+
+const MID_TO_COUNTRY: Record<string, string> = {
+  A1F83G8C2ARO7P: "United Kingdom",
+  A13V1IB3VIYZZH: "France",
+  APJ6JRA9NG5V4: "Italy",
+  A1PA6795UKMFR9: "Germany",
+  A1RKKUPIHCS9HS: "Spain",
+  A1805IZSGTT6HS: "Netherlands",
+  AMEN7PMS3EDWL: "Belgium",
+  A2NODRKZP88ZB9: "Sweden",
+  A1C3SOZRARQ6R3: "Poland",
+  A28R8C7NBKEWEA: "Ireland",
+};
+
+function marketLabel(mid: string): string {
+  const name = MID_TO_COUNTRY[mid] ?? "Unknown";
+  return `${name} (${mid})`;
+}
 
 type ReportKey = "listings.snapshot" | "sales.orders" | "sales.snapshot" | "sales.cancellations" | "fee.estimate";
 
@@ -267,7 +287,30 @@ export default function Page() {
 
   const statusRows = useMemo(() => {
     const keys = Array.from(new Set([...Object.keys(lastRunByKey), ...Object.keys(lastSuccessByKey)])).sort();
-    return keys.map((k) => ({ key: k, lastRun: lastRunByKey[k], lastSuccess: lastSuccessByKey[k] }));
+
+    const formatWitnessKey = (raw: string) => {
+      const [prefix, ...rest] = String(raw).split(":");
+      const mid = rest.join(":");
+      if (!mid) return raw;
+
+      const prefixLabel: Record<string, string> = {
+        INV: "Inventory",
+        SALES: "Sales",
+        FEE: "Fee Estimate",
+        REPRICER: "Repricer",
+        LISTINGS: "Listings",
+      };
+
+      const p = prefixLabel[prefix] ?? prefix;
+      return `${p} • ${marketLabel(mid)}`;
+    };
+
+    return keys.map((k) => ({
+      key: k,
+      keyLabel: formatWitnessKey(k),
+      lastRun: lastRunByKey[k],
+      lastSuccess: lastSuccessByKey[k],
+    }));
   }, [lastRunByKey, lastSuccessByKey]);
 
   return (
@@ -316,7 +359,7 @@ export default function Page() {
             >
               {marketplaceIds.map((mid) => (
                 <option key={mid} value={mid}>
-                  {mid}
+                  {marketLabel(mid)}
                 </option>
               ))}
             </select>
@@ -367,6 +410,7 @@ export default function Page() {
             <thead className="text-white/60">
               <tr className="border-b border-white/10">
                 <th className="py-2 pr-3 text-left">System</th>
+                <th className="py-2 pr-3 text-left">Marketplace</th>
                 <th className="py-2 pr-3 text-left">Last automation</th>
                 <th className="py-2 pr-3 text-left">Snapshot saved/updated</th>
                 <th className="py-2 pr-3 text-left">Last success</th>
@@ -379,6 +423,7 @@ export default function Page() {
                 automationHealth.map((r) => (
                   <tr key={r.system} className="border-b border-white/5">
                     <td className="py-2 pr-3 font-medium">{r.system}</td>
+                    <td className="py-2 pr-3">{r.marketplaceName ? `${r.marketplaceName}${r.marketplaceId ? ` (${r.marketplaceId})` : ""}` : "—"}</td>
                     <td className="py-2 pr-3">{fmtIso(r.lastAutomationAt)}</td>
                     <td className="py-2 pr-3">{fmtIso(r.lastSnapshotAt)}</td>
                     <td className="py-2 pr-3">{fmtIso(r.lastSuccessAt)}</td>
@@ -388,7 +433,7 @@ export default function Page() {
                 ))
               ) : (
                 <tr>
-                  <td colSpan={6} className="py-3 text-white/60">No automation health data yet.</td>
+                  <td colSpan={7} className="py-3 text-white/60">No automation health data yet.</td>
                 </tr>
               )}
             </tbody>
@@ -413,7 +458,10 @@ export default function Page() {
               {statusRows.length ? (
                 statusRows.map((r) => (
                   <tr key={r.key} className="border-b border-white/5">
-                    <td className="py-2 pr-3 font-mono text-xs">{r.key}</td>
+                    <td className="py-2 pr-3">
+                      <div className="text-xs">{r.keyLabel}</div>
+                      <div className="font-mono text-[10px] text-white/40">{r.key}</div>
+                    </td>
                     <td className="py-2 pr-3">{fmtIso(r.lastRun)}</td>
                     <td className="py-2">{fmtIso(r.lastSuccess)}</td>
                   </tr>
