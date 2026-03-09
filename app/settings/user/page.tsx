@@ -6,6 +6,18 @@ import { Save, RefreshCw } from "lucide-react";
 
 type SettingsResp = { ok: boolean; settings?: any; error?: string };
 
+type AutomationHealthRow = {
+  system: string;
+  lastAutomationAt: string | null;
+  lastSnapshotAt: string | null;
+  lastSuccessAt: string | null;
+  awsCostPerRunGbp: string;
+  note: string;
+};
+
+// Backward-compatible alias: older branches referenced CountryCode in VAT helpers.
+type CountryCode = string;
+
 type CadenceKey =
   | "15m"
   | "30m"
@@ -18,38 +30,50 @@ type CadenceKey =
   | "Weekly"
   | "Monthly";
 
-const CADENCE_OPTIONS: { key: CadenceKey; label: string }[] = [
-  { key: "15m", label: "15m" },
-  { key: "30m", label: "30m" },
-  { key: "1hr", label: "1hr" },
-  { key: "2hr", label: "2hr" },
-  { key: "3hr", label: "3hr" },
-  { key: "6hr", label: "6hr" },
-  { key: "12hr", label: "12hr" },
-  { key: "Daily", label: "Daily" },
-  { key: "Weekly", label: "Weekly" },
-  { key: "Monthly", label: "Monthly" },
+const CADENCE_OPTIONS: { key: CadenceKey; label: string; minutes: number }[] = [
+  { key: "15m", label: "15m", minutes: 15 },
+  { key: "30m", label: "30m", minutes: 30 },
+  { key: "1hr", label: "1hr", minutes: 60 },
+  { key: "2hr", label: "2hr", minutes: 120 },
+  { key: "3hr", label: "3hr", minutes: 180 },
+  { key: "6hr", label: "6hr", minutes: 360 },
+  { key: "12hr", label: "12hr", minutes: 720 },
+  { key: "Daily", label: "Daily", minutes: 1440 },
+  { key: "Weekly", label: "Weekly", minutes: 10080 },
+  { key: "Monthly", label: "Monthly", minutes: 43200 },
 ];
 
-type ReportKey = "SALES_ORDERS" | "SALES_BUILD_SNAPSHOT" | "SALES_CANCELLATIONS";
+type ReportKey = "listings.snapshot" | "sales.orders" | "sales.snapshot" | "sales.cancellations" | "fee.estimate";
 
 const REPORTS: { key: ReportKey; title: string; desc: string }[] = [
   {
-    key: "SALES_ORDERS",
-    title: "Sales — Orders report",
-    desc: "Near-real-time sales feed (includes unshipped). Used for Overview â€˜Today so farâ€™.",
+    key: "listings.snapshot",
+    title: "Listings — Build snapshot",
+    desc: "Refresh listing truth/snapshot from Amazon listings report. Snapshot drives Listings MI accuracy.",
   },
   {
-  key: "SALES_BUILD_SNAPSHOT",
-  title: "Sales — Build snapshot",
-  desc: "Rebuild SalesSnapshot buckets from stored SalesLine rows (keeps MI Sales page live).",
-},
+    key: "sales.orders",
+    title: "Sales — Orders report",
+    desc: "Near-real-time sales feed (includes unshipped). Used for Overview ‘Today so far’.",
+  },
   {
-    key: "SALES_CANCELLATIONS",
+    key: "sales.snapshot",
+    title: "Sales — Build snapshot",
+    desc: "Rebuild SalesSnapshot buckets from stored SalesLine rows (keeps MI Sales page live).",
+  },
+  {
+    key: "sales.cancellations",
     title: "Sales — Cancellations report",
     desc: "Daily cleanup for cancelled/unshipped orders to keep Overview accurate.",
   },
+  {
+    key: "fee.estimate",
+    title: "Fees — Estimate",
+    desc: "Persist fee estimates to SalesLine and include them in profit calculations.",
+  },
 ];
+
+type UiCadence = Record<string, { day: CadenceKey; night: CadenceKey }>;
 
 function safeJson<T>(s: any, fallback: T): T {
   try {
@@ -66,6 +90,33 @@ function clampHour(n: any, fallback: number) {
   return Math.max(0, Math.min(23, Math.trunc(x)));
 }
 
+function cadenceToMinutes(c: CadenceKey): number {
+  return CADENCE_OPTIONS.find((x) => x.key === c)?.minutes ?? 1440;
+}
+
+function minutesToCadence(minutes: unknown): CadenceKey {
+  const m = Number(minutes);
+  if (!Number.isFinite(m) || m <= 0) return "Daily";
+  const exact = CADENCE_OPTIONS.find((x) => x.minutes === m);
+  if (exact) return exact.key;
+  if (m <= 15) return "15m";
+  if (m <= 30) return "30m";
+  if (m <= 60) return "1hr";
+  if (m <= 120) return "2hr";
+  if (m <= 180) return "3hr";
+  if (m <= 360) return "6hr";
+  if (m <= 720) return "12hr";
+  return "Daily";
+}
+
+function fmtIso(iso: unknown): string {
+  const s = String(iso ?? "").trim();
+  if (!s) return "—";
+  const d = new Date(s);
+  if (Number.isNaN(d.getTime())) return s;
+  return d.toLocaleString();
+}
+
 export default function Page() {
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -77,11 +128,21 @@ export default function Page() {
   const [dayEndHour, setDayEndHour] = useState(22);
 
   // report cadence
-  const [cadences, setCadences] = useState<Record<string, { day: CadenceKey; night: CadenceKey }>>({
-  SALES_ORDERS: { day: "15m", night: "1hr" },
-  SALES_BUILD_SNAPSHOT: { day: "15m", night: "1hr" },
-  SALES_CANCELLATIONS: { day: "Daily", night: "Daily" },
-});
+  const [cadences, setCadences] = useState<UiCadence>({
+    "listings.snapshot": { day: "6hr", night: "Daily" },
+    "sales.orders": { day: "15m", night: "1hr" },
+    "sales.snapshot": { day: "15m", night: "1hr" },
+    "sales.cancellations": { day: "Daily", night: "Daily" },
+    "fee.estimate": { day: "Daily", night: "Daily" },
+  });
+
+  const [lastRunByKey, setLastRunByKey] = useState<Record<string, string>>({});
+  const [lastSuccessByKey, setLastSuccessByKey] = useState<Record<string, string>>({});
+  const [automationHealth, setAutomationHealth] = useState<AutomationHealthRow[]>([]);
+  const [marketplaceIds, setMarketplaceIds] = useState<string[]>([]);
+  const [selectedMid, setSelectedMid] = useState("");
+  const [runBusy, setRunBusy] = useState<string | null>(null);
+  const [runOutput, setRunOutput] = useState<string>("");
 
   async function load() {
     setLoading(true);
@@ -94,16 +155,41 @@ export default function Page() {
 
       const s = j.settings ?? {};
 
+      const ukMid = String(s.ukMarketplaceId ?? "").trim();
+      const euMids = safeJson<string[]>(s.euMarketplaceIdsJson ?? "[]", []);
+      const mids = Array.from(new Set([ukMid, ...euMids].map((x) => String(x ?? "").trim()).filter(Boolean)));
+      setMarketplaceIds(mids);
+      setSelectedMid((prev) => (prev && mids.includes(prev) ? prev : mids[0] ?? ""));
+
       setDayStartHour(clampHour(s.reportDayStartHour, 7));
       setDayEndHour(clampHour(s.reportDayEndHour, 22));
 
-      const fromJson = safeJson<Record<string, { day: CadenceKey; night: CadenceKey }>>(
+      const rawCadence = safeJson<Record<string, { enabled?: boolean; dayMinutes?: number; nightMinutes?: number }>>(
         s.reportCadenceByReportJson ?? "{}",
         {}
       );
 
-      // merge defaults + persisted
-      setCadences((prev) => ({ ...prev, ...fromJson }));
+      setCadences((prev) => {
+        const next: UiCadence = { ...prev };
+        for (const [k, v] of Object.entries(rawCadence)) {
+          next[k] = {
+            day: minutesToCadence(v?.dayMinutes),
+            night: minutesToCadence(v?.nightMinutes),
+          };
+        }
+        return next;
+      });
+
+      setLastRunByKey(safeJson<Record<string, string>>(s.inventoryLastRunByKeyJson ?? "{}", {}));
+      setLastSuccessByKey(safeJson<Record<string, string>>(s.reportLastSuccessByKeyJson ?? "{}", {}));
+
+      const hRes = await fetch("/api/settings/automation-health", { cache: "no-store" });
+      const hJson = await hRes.json().catch(() => ({}));
+      if (hRes.ok && hJson?.ok && Array.isArray(hJson.rows)) {
+        setAutomationHealth(hJson.rows as AutomationHealthRow[]);
+      } else {
+        setAutomationHealth([]);
+      }
     } catch (e: any) {
       setErr(e?.message || String(e));
     } finally {
@@ -120,10 +206,19 @@ export default function Page() {
     setErr(null);
     setOkMsg(null);
     try {
+      const cadencePayload: Record<string, { enabled: boolean; dayMinutes: number; nightMinutes: number }> = {};
+      for (const [k, v] of Object.entries(cadences)) {
+        cadencePayload[k] = {
+          enabled: true,
+          dayMinutes: cadenceToMinutes(v.day),
+          nightMinutes: cadenceToMinutes(v.night),
+        };
+      }
+
       const body = {
         reportDayStartHour: dayStartHour,
         reportDayEndHour: dayEndHour,
-        reportCadenceByReportJson: JSON.stringify(cadences),
+        reportCadenceByReportJson: JSON.stringify(cadencePayload),
       };
 
       const r = await fetch("/api/settings/app", {
@@ -151,14 +246,34 @@ export default function Page() {
     }));
   }
 
+  async function runNow(label: string, url: string) {
+    setRunBusy(label);
+    setRunOutput("");
+    setErr(null);
+    try {
+      const r = await fetch(url, { method: "POST" });
+      const j = await r.json().catch(() => ({}));
+      if (!r.ok || !j?.ok) throw new Error(j?.error ?? `HTTP ${r.status}`);
+      setRunOutput(JSON.stringify(j, null, 2));
+      await load();
+    } catch (e: any) {
+      setErr(`Manual run failed (${label}): ${e?.message || String(e)}`);
+    } finally {
+      setRunBusy(null);
+    }
+  }
+
+  const statusRows = useMemo(() => {
+    const keys = Array.from(new Set([...Object.keys(lastRunByKey), ...Object.keys(lastSuccessByKey)])).sort();
+    return keys.map((k) => ({ key: k, lastRun: lastRunByKey[k], lastSuccess: lastSuccessByKey[k] }));
+  }, [lastRunByKey, lastSuccessByKey]);
+
   return (
     <div className="space-y-4">
       <div className="flex items-end justify-between gap-3">
         <div>
           <h1 className="text-2xl font-semibold">Settings • Reporting</h1>
-          <p className="text-white/60">
-            Configure day/night cadence per report. Scheduler tick reads these settings (STK-style).
-          </p>
+          <p className="text-white/60">Configure day/night cadence per report. Scheduler tick reads these settings (STK-style).</p>
         </div>
 
         <div className="flex items-center gap-2">
@@ -184,11 +299,136 @@ export default function Page() {
       {err ? <div className="rounded-2xl border border-red-500/30 bg-red-500/10 p-3 text-sm text-red-200">{err}</div> : null}
       {okMsg ? <div className="rounded-2xl border border-emerald-500/30 bg-emerald-500/10 p-3 text-sm text-emerald-200">{okMsg}</div> : null}
 
+
+      <div className="rounded-2xl border border-white/10 bg-white/5 p-4 space-y-3">
+        <div className="text-sm font-semibold">Manual automation test run</div>
+        <div className="text-xs text-white/60">Temporary diagnostics controls to verify scheduler plumbing. Trigger a run and inspect JSON response.</div>
+
+        <div className="flex flex-wrap items-end gap-3">
+          <label className="space-y-1">
+            <div className="text-xs text-white/60">Marketplace</div>
+            <select
+              value={selectedMid}
+              onChange={(e) => setSelectedMid(String(e.target.value || ""))}
+              className="min-w-[260px] rounded-xl border border-white/10 bg-black/30 px-3 py-2 text-sm outline-none"
+            >
+              {marketplaceIds.map((mid) => (
+                <option key={mid} value={mid}>
+                  {mid}
+                </option>
+              ))}
+            </select>
+          </label>
+
+          <button
+            disabled={!selectedMid || !!runBusy}
+            onClick={() => runNow("Listings", `/api/clean/all-listings/ingest?mid=${encodeURIComponent(selectedMid)}`)}
+            className="rounded-xl border border-white/10 bg-white/10 px-3 py-2 text-sm hover:bg-white/15 disabled:opacity-50"
+          >Run Listings</button>
+          <button
+            disabled={!selectedMid || !!runBusy}
+            onClick={() => runNow("Sales Orders", `/api/sales/reports/orders/download?mid=${encodeURIComponent(selectedMid)}`)}
+            className="rounded-xl border border-white/10 bg-white/10 px-3 py-2 text-sm hover:bg-white/15 disabled:opacity-50"
+          >Run Sales Orders</button>
+          <button
+            disabled={!selectedMid || !!runBusy}
+            onClick={() => runNow("Sales Snapshot", `/api/sales/build-snapshot?mid=${encodeURIComponent(selectedMid)}`)}
+            className="rounded-xl border border-white/10 bg-white/10 px-3 py-2 text-sm hover:bg-white/15 disabled:opacity-50"
+          >Run Sales Snapshot</button>
+          <button
+            disabled={!selectedMid || !!runBusy}
+            onClick={() => runNow("Fee Estimate", `/api/fees/estimate?mid=${encodeURIComponent(selectedMid)}`)}
+            className="rounded-xl border border-white/10 bg-white/10 px-3 py-2 text-sm hover:bg-white/15 disabled:opacity-50"
+          >Run Fee Estimate</button>
+          <button
+            disabled={!selectedMid || !!runBusy}
+            onClick={() => runNow("Repricer", `/api/repricer/run?mid=${encodeURIComponent(selectedMid)}`)}
+            className="rounded-xl border border-white/10 bg-white/10 px-3 py-2 text-sm hover:bg-white/15 disabled:opacity-50"
+          >Run Repricer</button>
+          <button
+            disabled={!!runBusy}
+            onClick={() => runNow("Scheduler Force", `/api/scheduler/tick?force=1&verbose=1${selectedMid ? `&mid=${encodeURIComponent(selectedMid)}` : ""}`)}
+            className="rounded-xl border border-emerald-400/30 bg-emerald-500/10 px-3 py-2 text-sm hover:bg-emerald-500/15 disabled:opacity-50"
+          >Force Scheduler Tick</button>
+        </div>
+
+        {runBusy ? <div className="text-xs text-white/60">Running: {runBusy}…</div> : null}
+        {runOutput ? <pre className="max-h-64 overflow-auto rounded-xl border border-white/10 bg-black/40 p-3 text-xs">{runOutput}</pre> : null}
+      </div>
+
+      <div className="rounded-2xl border border-white/10 bg-white/5 p-4 space-y-3">
+        <div className="text-sm font-semibold">Automation status + snapshot witness + rough AWS cost</div>
+        <div className="text-xs text-white/60">Use this to spot which subsystem has stalled and where to investigate first.</div>
+
+        <div className="overflow-auto">
+          <table className="w-full text-sm">
+            <thead className="text-white/60">
+              <tr className="border-b border-white/10">
+                <th className="py-2 pr-3 text-left">System</th>
+                <th className="py-2 pr-3 text-left">Last automation</th>
+                <th className="py-2 pr-3 text-left">Snapshot saved/updated</th>
+                <th className="py-2 pr-3 text-left">Last success</th>
+                <th className="py-2 pr-3 text-left">Rough AWS cost / run</th>
+                <th className="py-2 text-left">Notes</th>
+              </tr>
+            </thead>
+            <tbody>
+              {automationHealth.length ? (
+                automationHealth.map((r) => (
+                  <tr key={r.system} className="border-b border-white/5">
+                    <td className="py-2 pr-3 font-medium">{r.system}</td>
+                    <td className="py-2 pr-3">{fmtIso(r.lastAutomationAt)}</td>
+                    <td className="py-2 pr-3">{fmtIso(r.lastSnapshotAt)}</td>
+                    <td className="py-2 pr-3">{fmtIso(r.lastSuccessAt)}</td>
+                    <td className="py-2 pr-3">{r.awsCostPerRunGbp}</td>
+                    <td className="py-2 text-white/70">{r.note}</td>
+                  </tr>
+                ))
+              ) : (
+                <tr>
+                  <td colSpan={6} className="py-3 text-white/60">No automation health data yet.</td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div className="rounded-2xl border border-white/10 bg-white/5 p-4 space-y-3">
+        <div className="text-sm font-semibold">Data freshness witness</div>
+        <div className="text-xs text-white/60">Quick check of last scheduler run and last successful report windows.</div>
+
+        <div className="overflow-auto">
+          <table className="w-full text-sm">
+            <thead className="text-white/60">
+              <tr className="border-b border-white/10">
+                <th className="py-2 pr-3 text-left">Key</th>
+                <th className="py-2 pr-3 text-left">Last run</th>
+                <th className="py-2 text-left">Last success</th>
+              </tr>
+            </thead>
+            <tbody>
+              {statusRows.length ? (
+                statusRows.map((r) => (
+                  <tr key={r.key} className="border-b border-white/5">
+                    <td className="py-2 pr-3 font-mono text-xs">{r.key}</td>
+                    <td className="py-2 pr-3">{fmtIso(r.lastRun)}</td>
+                    <td className="py-2">{fmtIso(r.lastSuccess)}</td>
+                  </tr>
+                ))
+              ) : (
+                <tr>
+                  <td colSpan={3} className="py-3 text-white/60">No witness data yet.</td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
       <div className="rounded-2xl border border-white/10 bg-white/5 p-4 space-y-3">
         <div className="text-sm font-semibold">Daytime window</div>
-        <div className="text-xs text-white/60">
-          Used to choose whether day cadence or night cadence applies. Hours are Europe/London.
-        </div>
+        <div className="text-xs text-white/60">Used to choose whether day cadence or night cadence applies. Hours are Europe/London.</div>
 
         <div className="flex flex-wrap items-center gap-3">
           <label className="space-y-1">
@@ -272,10 +512,6 @@ export default function Page() {
               </div>
             );
           })}
-        </div>
-
-        <div className="text-xs text-white/60">
-          Next: we'll add a "Run now" button per report once the downloader endpoints exist.
         </div>
       </div>
     </div>
