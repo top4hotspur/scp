@@ -1,5 +1,6 @@
-SCP tree (clean) @ 2026-03-05 13:22:18
+SCP tree (clean) @ 2026-03-06 14:25:06
 ?? amplify
+  ?? auth
   ?? data
     ?? InventorySnapshot
     ?? RepriceSnapshot
@@ -45,6 +46,9 @@ SCP tree (clean) @ 2026-03-05 13:22:18
     ?? new-lines
       ?? has-inventory
       ?? scan
+    ?? overview
+      ?? snapshot
+        ?? latest
     ?? purchase-orders
       ?? active
       ?? csv
@@ -93,14 +97,17 @@ SCP tree (clean) @ 2026-03-05 13:22:18
     ?? settings
       ?? app
     ?? spapi
+      ?? listings-item
       ?? ping
     ?? suppliermap
       ?? preview
       ?? upload
     ?? viewer
       ?? heartbeat
+  ?? login
   ?? mi
     ?? clean
+    ?? overview
     ?? reports
     ?? restock
     ?? sales
@@ -120,10 +127,12 @@ SCP tree (clean) @ 2026-03-05 13:22:18
 ?? components
   ?? cost
   ?? dock
+  ?? overview
   ?? pages
   ?? shell
   ?? viewer
 ?? lib
+  ?? overview
   ?? spapi
 ?? public
 ?? .env.local
