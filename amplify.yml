@@ -4,18 +4,16 @@ frontend:
     preBuild:
       commands:
         - npm ci
-
     build:
       commands:
-        # expose only the SPAPI vars to Next runtime
         - env | grep SPAPI_LWA >> .env.production
+        - env | grep SPAPI_AWS >> .env.production
+        - env | grep SPAPI_SELLER_ID >> .env.production
         - npm run build
-
   artifacts:
     baseDirectory: .next
     files:
       - '**/*'
-
   cache:
     paths:
       - node_modules/**/*
