@@ -454,6 +454,16 @@ export async function POST(req: Request) {
       },
     }).catch(() => null);
 
+    delete pending[pendingKey];
+    lastSuccess[pendingKey] = nowIso();
+    await gql(PUT_SETTINGS, {
+      input: {
+        id: "global",
+        reportPendingByKeyJson: JSON.stringify(pending),
+        reportLastSuccessByKeyJson: JSON.stringify(lastSuccess),
+      },
+    }).catch(() => null);
+
     return NextResponse.json({
       ok: true,
       mid,
